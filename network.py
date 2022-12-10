@@ -49,3 +49,4 @@ class FeedForwardNN(nn.Module):
         #print("output",output,"out_dim",self.out_dim)
     
         return output
+
