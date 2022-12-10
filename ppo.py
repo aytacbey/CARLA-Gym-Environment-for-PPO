@@ -6,13 +6,13 @@
 
 #import gym
 import time
-env=None
 import numpy as np
 import time
 import torch
 import torch.nn as nn
 from torch.optim import Adam
 from torch.distributions import MultivariateNormal
+
 
 class PPO:
     """
@@ -82,9 +82,13 @@ class PPO:
         t_so_far = 0 # Timesteps simulated so far
         i_so_far = 0 # Iterations ran so far
         while t_so_far < total_timesteps:                                                                       # ALG STEP 2
-            # Autobots, roll out (just kidding, we're collecting our batch simulations here)
-            batch_obs, batch_acts, batch_log_probs, batch_rtgs, batch_lens, batch_rews, batch_episodic_timesteps,batch_overall_timesteps, batch_rews_to_store, ep_no, batch_accumulated_speed, batch_total_overtakes, batch_total_collisions, batch_total_of_road, batch_aux_probs = self.rollout()                     # ALG STEP 3
-            print(" *** roll-out bitti")
+            # Collecting our batch simulations here
+            (batch_obs, batch_acts, batch_log_probs, batch_rtgs, batch_lens,
+            batch_rews, batch_episodic_timesteps,batch_overall_timesteps, 
+            batch_rews_to_store, ep_no, batch_accumulated_speed, 
+            batch_total_overtakes, batch_total_collisions, batch_total_of_road,
+            batch_aux_probs) = self.rollout()                     # ALG STEP 3
+
 			# Calculate how many timesteps we collected this batch
             t_so_far += np.sum(batch_lens)
 
@@ -113,17 +117,26 @@ class PPO:
             #string = "./baz_test/base_wo_vehicles" + str(i_so_far) + ".csv"
             # with open ("./baz_test/base_wo_vehicles_v3.csv","a",newline = "") as csvfile:
 
-            with open ("./baz_test_yeni_parkur_v4/base_w_vehicles_yeni_parkur_v5_aux.csv","a",newline = "") as csvfile:
+            with open ("./test_results.csv", "a", newline = "") as csvfile:
                 writer = csv.writer(csvfile)
-                print(batch_episodic_timesteps,batch_overall_timesteps)
+                print(batch_episodic_timesteps, batch_overall_timesteps)
                 _obs = batch_obs.tolist()
                 _act = batch_acts.tolist()
                # print(batch_acts,_act)
                 # print("listeye .evrilmiş ",_obs)
-                for (ep_tim,obs, tot_tim,rews ,acts,rtgs,speed, ovrtk_veh, tot_col, tot_ofroad, aux_prob ) in zip(batch_episodic_timesteps, _obs, batch_overall_timesteps, batch_rews_to_store, batch_acts, batch_rtgs, batch_accumulated_speed, batch_total_overtakes, batch_total_collisions, batch_total_of_road, batch_aux_probs):                    
-                    writer.writerow([ep_tim,obs, tot_tim,rews ,acts,rtgs, speed, ovrtk_veh, tot_col, tot_ofroad, aux_prob]) #[req_array her epoch için batch obs, act vb. yi kaydetme mantıklı olmayabilir ])
+                for (ep_tim,obs, tot_tim,rews ,acts,rtgs,speed, ovrtk_veh,
+                     tot_col, tot_ofroad, aux_prob ) in zip(
+                         batch_episodic_timesteps, _obs, 
+                         batch_overall_timesteps, batch_rews_to_store, 
+                         batch_acts, batch_rtgs, batch_accumulated_speed, 
+                         batch_total_overtakes, batch_total_collisions, 
+                         batch_total_of_road, batch_aux_probs):                    
+                    writer.writerow([ep_tim,obs, tot_tim,rews ,acts,rtgs,
+                                     speed, ovrtk_veh, tot_col, tot_ofroad, 
+                                     aux_prob])
 			# This is the loop where we update our network for some n epochs
-            for _ in range(self.n_updates_per_iteration):      # epoch number                                                  # ALG STEP 6 & 7
+            # PPO ALG STEP 6 & 7
+            for _ in range(self.n_updates_per_iteration):      # epoch number 
 				# Calculate V_phi and pi_theta(a_t | s_t)
                 V, curr_log_probs = self.evaluate(batch_obs, batch_acts)
 
@@ -144,14 +157,14 @@ class PPO:
                 for i in range(len(A_k.detach())):
                     if batch_aux_probs[i] == 1 and A_k[i]< 0:
                         aux_ratios[i] = max(ratios[i], 1.2)
-                        print("aux_ratio ataması", max(ratios[i], 1.2))
                 surr3 = aux_ratios * A_k  
-                print(batch_aux_probs, "aux_probs", )
+
                 # Calculate actor and critic losses.
 				# NOTE: we take the negative min of the surrogate losses because we're trying to maximize
 				# the performance function, but Adam minimizes the loss. So minimizing the negative
 				# performance function maximizes it.
-                """Bu noktada batchte bulunan tüm losslar ortalanıyor. Aux-rew buradan önce uygulanacak"""
+                # Note to self: Mean of the total loss is calculated here.
+                # Aux rew should be implemented here
                 actor_loss_batch = -torch.min(surr2, surr3).detach()
                 actor_loss = (-torch.min(surr2, surr3)).mean()
                 critic_loss = nn.MSELoss()(V, batch_rtgs)
@@ -205,8 +218,16 @@ class PPO:
 			# Save our model if it's time
             if i_so_far % self.save_freq == 0:
                 print("saving actor and critic model")
-                string_actor = "./baz_test_yeni_parkur_v4/ppo_aktor_ve_kritik_baz_test_yeni_parkur/ppo_actor_"+str(i_so_far)+"_"+str(self.avg_ep_rews)+".pth"
-                string_critic = "./baz_test_yeni_parkur_v4/ppo_aktor_ve_kritik_baz_test_yeni_parkur/ppo_critic_"+str(i_so_far)+"_"+str(self.avg_ep_rews)+".pth"               
+                string_actor = ("./actor_"
+                                + str(i_so_far) 
+                                + "_" 
+                                + str(self.avg_ep_rews) 
+                                + ".pth")
+                string_critic = ("./critic_" 
+                                 + str(i_so_far) 
+                                 + "_" 
+                                 + str(self.avg_ep_rews) 
+                                 + ".pth")               
                 torch.save(self.actor.state_dict(), string_actor)
                 torch.save(self.critic.state_dict(), string_critic)
                 
@@ -244,7 +265,7 @@ class PPO:
 		# Episodic data. Keeps track of rewards per episode, will get cleared
 		# upon each new episode
         ep_rews = []
-        ep_aux_rews = []
+        ep_aux_rews = []     # 
         t = 0 # Keeps track of how many timesteps we've run so far this batch
         ep_no = 0
 		# Keep simulating until we've run more than or equal to specified timesteps per batch
@@ -265,35 +286,32 @@ class PPO:
                 #     self.env.render()
 
                 t += 1 # Increment timesteps ran this batch so far
-           #     print("PPO - obs öncesi")
 				# Track observations in this batch
                 batch_obs.append(obs)
                 # print("toplam adım %s"%t,"episod adım%s"%ep_t)
 				# Calculate action and make a step in the env. 
 				# Note that rew is short for reward.
                 """Her bir timestep için önce action belirleniyor ardından env bu action gönderiliyor"""
-   
+                # Action's are evaluated
                 action, log_prob = self.get_action(obs)   
+                # Action's are sent to the gym-env
+                obs, rew, done, current_speed, total_overtakes,       \
+                total_coll, total_of_road, aux_rew = self.env.step(action)
 
-                obs, rew, done, current_speed, total_overtakes, total_coll,total_of_road, aux_rew = self.env.step(action)
-             #   print("rew ",rew, " timestep ",ep_t)
-                """Action sonucu yeni obs, rew, done ve aux_reward Envden gelecek"""
 				# Track recent reward, action, and action log probability
                 ep_rews.append(rew)
                 ep_aux_rews.append(aux_rew)
                 batch_rews_to_store.append(rew)
                 batch_acts.append(action)
                 batch_log_probs.append(log_prob)
-                batch_overall_timesteps.append(t)       # batchteki toplam timestep
-                batch_episodic_timesteps.append(ep_t+1) # episod timestepi
+                batch_overall_timesteps.append(t)    # total timestep in batch
+                batch_episodic_timesteps.append(ep_t + 1) # episod timestepi
                 batch_accumulated_speed.append(current_speed)
                 batch_total_overtakes.append(total_overtakes)
                 batch_total_collisions.append(total_coll)
                 batch_total_of_road.append(total_of_road)
  
-               # print("rewards",batch_rews_to_store)
-             #   #"2. adıma geçiş ")
-                """Done yanında çarpışma ve yoldan çıkma durumu da episodu bitirecek"""
+
 				# If the environment tells us the episode is terminated, break
                 if done:
                     break
@@ -309,13 +327,18 @@ class PPO:
         batch_obs = torch.stack(batch_obs) #orj torch.tensor(batch_acts, dtype=torch.float)
         batch_acts = torch.tensor(batch_acts, dtype=torch.float)
         batch_log_probs = torch.stack(batch_log_probs) #orj torch.tensor(batch_log_probs, dtype=torch.float)
-        batch_rtgs, batch_aux_probs = self.compute_rtgs(batch_rews, batch_aux_rewards)                                                              # ALG STEP 4
+        batch_rtgs, batch_aux_probs =     \
+            self.compute_rtgs(batch_rews, batch_aux_rewards)                                                              # ALG STEP 4
 
 		# Log the episodic returns and episodic lengths in this batch.
         self.logger['batch_rews'] = batch_rews
         self.logger['batch_lens'] = batch_lens
         
-        return batch_obs, batch_acts, batch_log_probs, batch_rtgs, batch_lens, batch_rews, batch_episodic_timesteps,batch_overall_timesteps, batch_rews_to_store, ep_no, batch_accumulated_speed, batch_total_overtakes, batch_total_collisions, batch_total_of_road, batch_aux_probs
+        return (batch_obs, batch_acts, batch_log_probs, batch_rtgs, batch_lens,
+                batch_rews, batch_episodic_timesteps,batch_overall_timesteps, 
+                batch_rews_to_store, ep_no, batch_accumulated_speed, 
+                batch_total_overtakes, batch_total_collisions, 
+                batch_total_of_road, batch_aux_probs)
 
     def compute_rtgs(self, batch_rews, batch_aux_rewards):
         """
@@ -342,12 +365,14 @@ class PPO:
                # print("*** rewards",ep_rews)
                 discounted_reward = rew + discounted_reward * self.gamma
                 batch_rtgs.insert(0, discounted_reward)
-
+        
+        # Auxiliary reward is in the trial phase.
+        # It's not part of the main PPO algorithm in any shape or form.
         for ep_aux_rews in reversed(batch_aux_rewards):
             end_point = 0
             start_point = 0
             for cnt, aux_rew in enumerate(reversed(ep_aux_rews)):
-                """bir episode içinde bir tane aux reward olmasını bekliyoruz"""
+                # It's expected to have max one aux reward in each episode.
                 if aux_rew == 1:
                     end_point = cnt + 100
                     start_point = cnt + 40
@@ -406,7 +431,7 @@ class PPO:
 				V - the predicted values of batch_obs
 				log_probs - the log probabilities of the actions taken in batch_acts given batch_obs
 		"""
-   #     print("query ")
+
 		# Query critic network for a value V for each batch_obs. Shape of V should be same as batch_rtgs
         V = self.critic(batch_obs).squeeze()
 
@@ -433,18 +458,18 @@ class PPO:
 		"""
 		# Initialize default values for hyperparameters
 		# Algorithm hyperparameters
-        self.timesteps_per_batch = 400_800_000                 # Number of timesteps to run per batch
-        self.max_timesteps_per_episode = 150_000           # Max number of timesteps per episode
-        self.n_updates_per_iteration = 5                # Number of times to update actor/critic per iteration
-        self.lr = 0.005                                 # Learning rate of actor optimizer
-        self.gamma = 0.95                               # Discount factor to be applied when calculating Rewards-To-Go
-        self.clip = 0.2                                 # Recommended 0.2, helps define the threshold to clip the ratio during SGA
+        self.timesteps_per_batch = 400_800_000     # Number of timesteps to run per batch
+        self.max_timesteps_per_episode = 150_000   # Max number of timesteps per episode
+        self.n_updates_per_iteration = 5           # Number of times to update actor/critic per iteration
+        self.lr = 0.005                            # Learning rate of actor optimizer
+        self.gamma = 0.95                          # Discount factor to be applied when calculating Rewards-To-Go
+        self.clip = 0.2                            # Recommended 0.2, helps define the threshold to clip the ratio during SGA
 
 		# Miscellaneous parameters
-        self.render = True                              # If we should render during rollout
-        self.render_every_i = 10                        # Only render every n iterations
-        self.save_freq = 5000                              # How often we save in number of iterations
-        self.seed = None                                # Sets the seed of our program, used for reproducibility of results
+        self.render = True                         # If we should render during rollout
+        self.render_every_i = 10                   # Only render every n iterations
+        self.save_freq = 5000                      # How often we save in number of iterations
+        self.seed = None                           # Sets the seed of our program, used for reproducibility of results
 
 		# Change any default values to custom values for specified hyperparameters
         for param, val in hyperparameters.items():
@@ -480,8 +505,10 @@ class PPO:
         t_so_far = self.logger['t_so_far']
         i_so_far = self.logger['i_so_far']
         avg_ep_lens = np.mean(self.logger['batch_lens'])
-        self.avg_ep_rews = np.mean([np.sum(ep_rews) for ep_rews in self.logger['batch_rews']])
-        avg_actor_loss = np.mean([losses.float().mean() for losses in self.logger['actor_losses']])
+        self.avg_ep_rews = np.mean(
+            [np.sum(ep_rews) for ep_rews in self.logger['batch_rews']])
+        avg_actor_loss = np.mean(
+            [losses.float().mean() for losses in self.logger['actor_losses']])
 
 		# Round decimal places for more aesthetic logging messages
         avg_ep_lens = str(round(avg_ep_lens, 2))
@@ -490,13 +517,13 @@ class PPO:
 
 		# Print logging statements
         #flush=True)
-        print(f"-------------------- Iteration #{i_so_far} --------------------", flush=True)
+        print(f"---------- Iteration #{i_so_far} ----------------", flush=True)
         print(f"Average Episodic Length: {avg_ep_lens}", flush=True)
         print(f"Average Episodic Return: {avg_ep_rews}", flush=True)
         print(f"Average Loss: {avg_actor_loss}", flush=True)
         print(f"Timesteps So Far: {t_so_far}", flush=True)
         print(f"Iteration took: {delta_t} secs", flush=True)
-        print(f"------------------------------------------------------", flush=True)
+        print(f"-------------------------------------------------", flush=True)
         print(flush=True)
 
 		# Reset batch-specific logging data
