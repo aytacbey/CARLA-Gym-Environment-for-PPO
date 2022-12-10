@@ -842,7 +842,7 @@ class MapImage(object):
         # Find and Draw Traffic Signs: Stops and Yields
         font_size = world_to_pixel_width(1)
         font = pygame.font.SysFont('Arial', font_size, True)
-        """Waypointleri buraya çizmek mümkün"""
+
         stops = [actor for actor in actors if 'stop' in actor.type_id]
         yields = [actor for actor in actors if 'yield' in actor.type_id]
 
@@ -891,7 +891,7 @@ class World(object):
         self.server_fps = 0.0
         self.simulation_time = 0
         self.server_clock = pygame.time.Clock()
-        self.deneme = "Elhamdülillah"
+
         # World data
         self.world = None
         self.town_map = None
@@ -938,11 +938,11 @@ class World(object):
         self.sorted_waypoints = []
         self.collision = False
         self.aux_rew_flag = False
-        self.overtaked_vehicles = 0
-        self.total_overtaked_vehicles = 0
+        self.overtook_vehicles = 0
+        self.total_overtook_vehicles = 0
         self.total_collision = 0
         self.total_of_road = 0
-        self.overtaked_candidates = [None for i in range(15)]
+        self.overtook_candidates = [None for i in range(15)]
         self.vehicle_ids = [0 for i in range(15)]
         self.post_overtake_counter = [0 for i in range(15)]
         self.mid_overtake_counter  = [0 for i in range(15)]
@@ -957,140 +957,161 @@ class World(object):
         # 
         self.clock = pygame.time.Clock()
     def state_space(self):
-        """waypointler üretiliyor"""
-
-        #"State space - waypoin öncesi")
+        """State space of low state representation for PPO algorithm
         
-       # print("State space - wp transform öncesi")
+        This will calculate distance to waypoints, speed, location etc. for
+        PPO algorithm
+        """
+
         self.wp_location = self.hero_transform.location
-      #  print("State space - wp_location")
         
         if self.wp1 is None:
-            #print("State space - waypoin ifi")
-            self.wp1 = self.world.get_map().get_waypoint(self.wp_location,project_to_road = True)
-      #      print(len(self.wp1.next(5)))
+            self.wp1 = self.world.get_map().get_waypoint(
+                self.wp_location, project_to_road=True)
             self.wp2 = self.wp1.next(2)[0]
             self.wp3 = self.wp2.next(2)[0]
             self.wp4 = self.wp3.next(2)[0]
             self.wp5 = self.wp4.next(2)[0]
             self.wp6 = self.wp5.next(2)[0]
             self.wp7 = self.wp6.next(2)[0]            
-            self.waypoints = [self.wp1,self.wp2,self.wp3,self.wp4,self.wp5, self.wp6, self.wp7]
-      #  print("State space - WP ara") 
-        # self.counter+=1
+            self.waypoints = [self.wp1, self.wp2, self.wp3, self.wp4, 
+                              self.wp5, self.wp6, self.wp7]
         self.sorted_waypoints =[]
-       # print("State space - Wsorted_waypoints tanımlanıyor")
+
         x1 = self.hero_transform.location.x    
         y1 = self.hero_transform.location.y 
-        x_i,y_i = x1 + math.cos(math.radians(self.hero_yaw)),y1 + math.sin(math.radians(self.hero_yaw)) #Aktörün tampondaki bir nokta, vektörel işlemler için gerekli
+        x_i,y_i = (x1 + math.cos(math.radians(self.hero_yaw)), 
+                   y1 + math.sin(math.radians(self.hero_yaw)))
         x2 = self.wp7.transform.location.x
         y2 = self.wp7.transform.location.y      
-     #   print("State space - hero ile wp5 mesafesi")
-        if math.sqrt(pow(x2-x1,2)+pow(y2-y1,2))<14.5:                
+
+        if math.sqrt(pow(x2-x1, 2) + pow(y2-y1, 2)) < 14.5:                
             self.wp1 = self.wp2
             self.wp2 = self.wp3
             self.wp3 = self.wp4
             self.wp4 = self.wp5
             self.wp5 = self.wp6
             self.wp6 = self.wp7
-           # self.wp5 = self.wp5.next(2)
-            """Road idleri belirlenip ona göre waypoint ataması yapılıyor, rastgele rotalar için bu satırın silininp sadece .next li ifadenin kalması lazım"""
- #           if len(self.wp5) is not 0:
-
-            self.wp7 = [wp for wp in self.wp7.next(2) if wp.road_id in [59, 168, 60, 464, 61, 559, 62, 352, 24, 20, 467, 920, 21, 57, 58,569,579,147,436, 452, 39]] 
-            # self.wp5.next(2)[0]    
-                # self.wp5.get_right_lane()
-               # print("get_right_lane çalıştı")
+            
+            # Waypoints will be selected based upon road ID, for random
+            # trajectories if and following line should be deleted 
+            self.wp7 = [wp for wp in self.wp7.next(2) 
+                        if wp.road_id in [
+                                59, 168, 60, 464, 61, 559, 62, 352, 24, 20, 
+                                467, 920, 21, 57, 58,569,579,147,436, 452, 39]] 
 
             self.wp7 = self.wp7[0]
-           # print("sonrası",self.wp5.road_id)            
-            self.waypoints = [self.wp1,self.wp2,self.wp3,self.wp4,self.wp5, self.wp6, self.wp7]
-        #    print("State space - if içinde mesafeye göre wpler atanıyor")
-            # self.counter = 0
-                #self.waypoints)
-        """Waypointler uzaklığa göre sıralanıyor"""   
-     #   print("State space - WP sıralanıyor") 
+           
+            self.waypoints = [self.wp1, self.wp2, self.wp3, self.wp4, 
+                              self.wp5, self.wp6, self.wp7]
+
+        # Waypoints are sorted based on the distance
         if True:
            # print(self.wp1.transform.location)
-            self.current_location = self.hero_transform.location # iki yerde atanıyor, dikkat
+            self.current_location = self.hero_transform.location 
             def distance(v): return self.current_location.distance(v.transform.location)
-          #  print("def distance ve for arası")
             for n, waypoints in enumerate(sorted(self.waypoints, key=distance)):
                 self.sorted_waypoints.append(waypoints)
 
-        """En yakın iki waypointin hangisinin önce geldiği belirlenecek"""
-        _, angle_between_wp = self.compute_magnitude_angle(self.sorted_waypoints[1].transform.location, self.sorted_waypoints[0].transform.location, self.sorted_waypoints[0].transform.rotation.yaw)
-        """Waypoint arası açıya göre birinci ve ikinci wp belirlenecek. Bu andan itibaren şeritin hangi bölgesinde olduğumu belirleyebiliriz"""
+        # Find the closest waypoint from the two closest waypoints
+        _, angle_between_wp = self.compute_magnitude_angle(
+            self.sorted_waypoints[1].transform.location, 
+            self.sorted_waypoints[0].transform.location, 
+            self.sorted_waypoints[0].transform.rotation.yaw)
+
+        # Based on the angle between waypoints 1. and 2. wp will be determined.
+        # From this point onwards we could determine which lane we're in
         if angle_between_wp < 90:
             self.first_waypoint = self.sorted_waypoints[0]
             self.second_waypoint = self.sorted_waypoints[1]
         else:
             self.first_waypoint = self.sorted_waypoints[1]
             self.second_waypoint = self.sorted_waypoints[0]  
-        """Belirlenen waypointlere göre aracın hangi bölgede olduğu anlaşılacak""" 
+        
+        # Determination of lane we're in 
         self.first_wp_transform = self.first_waypoint.transform
         self.second_wp_transform = self.second_waypoint.transform        
-        self.lane_region = np.sign((self.second_wp_transform.location.x-self.first_wp_transform.location.x)*(self.hero_transform.location.y-self.first_wp_transform.location.y)
-                            -(self.second_wp_transform.location.y-self.first_wp_transform.location.y)*(self.hero_transform.location.x-self.first_wp_transform.location.x))
-      #  print("şeritte %s bölgesinde" % self.lane_region)
-        """Şerit ihlal durumu"""
-        """Şeritten çıkma durumu"""
-        """Waypointler statelere input olacak"""  
+        self.lane_region = np.sign((self.second_wp_transform.location.x-self.first_wp_transform.location.x) 
+                                   *(self.hero_transform.location.y-self.first_wp_transform.location.y)
+                                   - (self.second_wp_transform.location.y-self.first_wp_transform.location.y) 
+                                   *(self.hero_transform.location.x-self.first_wp_transform.location.x))
+
         for i in range(len(self.waypoints)): 
             x1,y1 = self.current_location.x, self.current_location.y
-            x2,y2 = x1 + math.cos(math.radians(self.hero_yaw)),y1 + math.sin(math.radians(self.hero_yaw))
+            x2,y2 = (x1 + math.cos(math.radians(self.hero_yaw)), 
+                     y1 + math.sin(math.radians(self.hero_yaw)))
             wp_loc = self.waypoints[i].transform.location
 
-            self.wp_region = np.sign((x_i-x1)*(wp_loc.y-y1)-(y_i-y1)*(wp_loc.x-x1))     #waypointin hangi bölgede olduğunu söylüyor
+            # Waypoint's region is determined
+            self.wp_region = np.sign((x_i-x1) * (wp_loc.y-y1) 
+                                     - (y_i-y1) * (wp_loc.x-x1))
+            
+            # Distance to wp
+            dist_to_wp = self.current_location.distance(wp_loc)
+            
+            # Angle between vehicles
+            _,angle_btw_wp = self.compute_magnitude_angle(
+                wp_loc, self.current_location, self.hero_yaw)
+            abs_angle_btw_wp = self.wp_region * angle_btw_wp      
+            wp_rel_loc_x = round(
+                math.cos(math.radians(abs_angle_btw_wp)) * dist_to_wp, 2)
+            wp_rel_loc_y = round(
+                math.sin(math.radians(abs_angle_btw_wp)) * dist_to_wp, 2)
 
-            dist_to_wp = self.current_location.distance(wp_loc) # wp mesafesi alınıyor
-        
-            _,angle_btw_wp = self.compute_magnitude_angle(wp_loc,self.current_location, self.hero_yaw)  #araçlar arasındaki açıyı verecek
-            abs_angle_btw_wp = self.wp_region*angle_btw_wp      
-            wp_rel_loc_x = round(math.cos(math.radians(abs_angle_btw_wp))*dist_to_wp,2)
-            wp_rel_loc_y = round(math.sin(math.radians(abs_angle_btw_wp))*dist_to_wp,2)
-          #  print("%s. wp"%i," x %s ve" %wp_rel_loc_x," y %s"% wp_rel_loc_y,"mesafe %s"%dist_to_wp)
             self.states.append(round(wp_rel_loc_x/14,3))
             self.states.append(round(wp_rel_loc_y/14,3))
-
-      #  print("State space - şerit mesafe")
-        """şerit ve araç mesafe farkı"""
+        
+        # Distance between lane center and vehicle
         norm = np.linalg.norm
-        wp1 = np.array([self.first_waypoint.transform.location.x,self.first_waypoint.transform.location.y])
-        wp2 = np.array([self.second_waypoint.transform.location.x,self.second_waypoint.transform.location.y])
-        veh = np.array([self.hero_transform.location.x,self.hero_transform.location.y])
-        self.dist_to_lane = round(np.cross(wp2-wp1,veh-wp1)/np.linalg.norm(wp2-wp1),2)
+        wp1 = np.array([self.first_waypoint.transform.location.x, 
+                        self.first_waypoint.transform.location.y])
+        wp2 = np.array([self.second_waypoint.transform.location.x, 
+                        self.second_waypoint.transform.location.y])
+        veh = np.array([self.hero_transform.location.x, 
+                        self.hero_transform.location.y])
+        self.dist_to_lane = round(
+            np.cross(wp2-wp1, veh-wp1) / np.linalg.norm(wp2-wp1), 2)
 
-        if self.lane_region ==1 and self.dist_to_lane > 5:
+        if self.lane_region == 1 and self.dist_to_lane > 5:
             self.vehicle_off_the_road = True
-            print("££££ araç sağ şeritten %s m farkla çıktı" %self.dist_to_lane)
+            print("Vehicle off the right lane about %s m" %self.dist_to_lane)
         elif self.lane_region ==-1 and self.dist_to_lane < -6.7:
             self.vehicle_off_the_road = True
-            print("#### araç sol şeritten %s m farkla çıktı" %self.dist_to_lane)
+            print("Vehicle off the left lane about %s m" %self.dist_to_lane)
         else:
             self.vehicle_off_the_road = False
         self.states.append(round(self.dist_to_lane/6.4,3))
-        """şerit ve araç açı farkı"""
-        x_wp1, y_wp1 = self.first_waypoint.transform.location.x, self.first_waypoint.transform.location.y
-        x_wp2, y_wp2 = self.second_waypoint.transform.location.x, self.second_waypoint.transform.location.y
+
+        # Angle between lane center and vehicle
+        x_wp1, y_wp1 = (self.first_waypoint.transform.location.x, 
+                        self.first_waypoint.transform.location.y)
+        x_wp2, y_wp2 = (self.second_waypoint.transform.location.x, 
+                        self.second_waypoint.transform.location.y)
         wp_magnitude = math.sqrt((x_wp2-x_wp1)**2 + (y_wp2-y_wp1)**2)
-        theta_wp = math.degrees(math.acos((x_wp2-x_wp1)/max(wp_magnitude,0.001)))*np.sign(math.degrees(math.asin((y_wp2-y_wp1)/max(wp_magnitude,0.001))))        
+        theta_wp = math.degrees(
+            math.acos((x_wp2-x_wp1) / max(wp_magnitude, 0.001)))    \
+            * np.sign(math.degrees(math.asin((y_wp2-y_wp1) 
+                                             / max(wp_magnitude, 0.001))))        
    
-        self.angle_to_lane = (theta_wp-self.hero_transform.rotation.yaw)
+        self.angle_to_lane = (theta_wp - self.hero_transform.rotation.yaw)
         self.states.append(round(self.angle_to_lane/180,3))
-        # print( "yol numarası %s "%self.current_waypoint.road_id,"lane %s"%self.current_waypoint.lane_id, "şerit %s"%self.dist_to_lane,"açı %s"%self.angle_to_lane)
-      #  print("yol açı %s"%theta_wp,"araç açı %s"%self.hero_yaw,"şerit açı %s"%self.angle_to_lane,"şerit mesafe %s"%self.dist_to_lane)
-        """çevredeki araçların state bilgileri"""
+ 
+
+        # State representations of surrounding vehicles
         x_h,y_h = self.current_location.x, self.current_location.y
-        v_x,v_y = self.hero_actor.get_velocity().x,self.hero_actor.get_velocity().y
-        Theta_spd = math.degrees(math.acos(v_x/max((math.sqrt(v_x**2 + v_y**2),0.001))))*np.sign(math.degrees(math.asin(v_y/max((math.sqrt(v_x**2 + v_y**2),0.001)))))
+        v_x,v_y = (self.hero_actor.get_velocity().x, 
+                   self.hero_actor.get_velocity().y)
+        Theta_spd = math.degrees(
+            math.acos(v_x/max((math.sqrt(v_x**2 + v_y**2), 0.001))))        \
+            * np.sign(math.degrees(
+                math.asin(v_y/max((math.sqrt(v_x**2 + v_y**2), 0.001)))))
         spd_dif = float(Theta_spd)-self.hero_yaw
-      #  print("Hız açısı %s"%round(Theta_spd,1),"Hero yaw %s"%round(self.hero_yaw,1),"dif %s"%round(spd_dif,1) )
-    #    print("x hızı %s "%self.hero_actor.get_velocity().x,"y hızı %s"%self.hero_actor.get_velocity().y)
+
         for actor in self.nearby_vehicles:
-        #    print("self.nearby_vehicles",len(self.nearby_vehicles),self.nearby_vehicles)
             if actor =="none_front":
-                obs_space = [1,1,0,0,0,1] # İlk iki göreceli mesafe, 3. yaw açısı, 4. ve 5. göreceli hız, 6 şerit numarası
+                # Zeroth and first are relative distances, 2. is yaw, 3. 
+                # and 4. are relative speed. 5. is the lane region
+                obs_space = [1,1,0,0,0,1]
                 for i in range(len(obs_space)):
                     
                     self.states.append(obs_space[i])
@@ -1105,107 +1126,138 @@ class World(object):
                 veh_loc = actor.get_transform().location
                 veh_rot = actor.get_transform().rotation
                 
-                x_v,y_v = x_h + math.cos(math.radians(self.hero_yaw)),y_h + math.sin(math.radians(self.hero_yaw))
+                x_v,y_v = (x_h + math.cos(math.radians(self.hero_yaw)), 
+                           y_h + math.sin(math.radians(self.hero_yaw)))
                 
+                # Waypoint's region
+                self.veh_region = np.sign((x_v-x_h)*(veh_loc.y-y_h) 
+                                          - (y_v-y_h)*(veh_loc.x-x_h))
 
-                self.veh_region = np.sign((x_v-x_h)*(veh_loc.y-y_h)-(y_v-y_h)*(veh_loc.x-x_h))     #waypointin hangi bölgede olduğunu söylüyor
+                # Distance betweeen waypoint and vehicle
+                dist_to_n_veh = round(self.current_location.distance(veh_loc),3)
+                
+                # Angle between vehicles
+                _,angle_btw_n_veh = self.compute_magnitude_angle(
+                    veh_loc, self.current_location, self.hero_yaw)
+                abs_angle_btw_n_veh = self.veh_region * angle_btw_n_veh      
+                veh_rel_loc_x = round(math.cos(
+                    math.radians(abs_angle_btw_n_veh)) * dist_to_n_veh, 3)
+                veh_rel_loc_y = round(math.sin(
+                    math.radians(abs_angle_btw_n_veh)) * dist_to_n_veh, 3)
 
-                dist_to_n_veh = round(self.current_location.distance(veh_loc),3) # wp mesafesi alınıyor
-        
-                _,angle_btw_n_veh = self.compute_magnitude_angle(veh_loc,self.current_location, self.hero_yaw)  #araçlar arasındaki açıyı verecek
-                abs_angle_btw_n_veh = self.veh_region*angle_btw_n_veh      
-                veh_rel_loc_x = round(math.cos(math.radians(abs_angle_btw_n_veh))*dist_to_n_veh,3)
-                veh_rel_loc_y = round(math.sin(math.radians(abs_angle_btw_n_veh))*dist_to_n_veh,3)
-              #  print("%s. veh"%actor.id," x %s ve" %veh_rel_loc_x," y %s"% veh_rel_loc_y,"mesafe %s"%dist_to_n_veh)
-             #   print(self.nearby_vehicles)
-                self.states.append(round(veh_rel_loc_x/60,3)) # x ekseni
-                self.states.append(round(veh_rel_loc_y/10,3)) # y ekseni
-                self.states.append(round(((veh_rot.yaw-self.hero_yaw)%180)/180,3))
-         #       print("stateler toplanma öarası")
-                #)
-                vehv_x,vehv_y = actor.get_velocity().x,actor.get_velocity().y
-                vehr_x,vehr_y = round(vehv_x - v_x,1),round(vehv_y - v_y,1) #relatif hızlar 
-                vehr_mag = round(math.sqrt(vehr_x**2 + vehr_y**2),1)
-                theta_speed = math.degrees(math.acos(vehr_x/max(vehr_mag,0.001)))*np.sign(math.degrees(math.asin(vehr_y/max(vehr_mag,0.001))))
+                self.states.append(round(veh_rel_loc_x / 60, 3)) # x axis
+                self.states.append(round(veh_rel_loc_y / 10, 3)) # y axis
+                self.states.append(
+                    round(((veh_rot.yaw-self.hero_yaw)%180) / 180, 3))
+
+                vehv_x,vehv_y = actor.get_velocity().x, actor.get_velocity().y
+                # Relative speed
+                vehr_x,vehr_y = round(vehv_x - v_x,1), round(vehv_y - v_y,1)  
+                vehr_mag = round(math.sqrt(vehr_x**2 + vehr_y**2), 1)
+                theta_speed = math.degrees(
+                    math.acos(vehr_x / max(vehr_mag, 0.001)))             \
+                    * np.sign(
+                        math.degrees(math.asin(vehr_y / max(vehr_mag, 0.001))))
                 angle_speed_dif = self.hero_yaw - float(theta_speed)
-                v_rel_x,v_rel_y = round(vehr_mag*math.cos(math.radians(angle_speed_dif)),1),round(vehr_mag*math.sin(math.radians(angle_speed_dif)),1)
-               # print("Relatif x hız %s " %v_rel_x, "Relatif y hız %s " %v_rel_y, "Hız %s " %vehr_mag,"Açı farkı %s " %angle_speed_dif)
+                v_rel_x, v_rel_y = (round(vehr_mag*math.cos(math.radians(angle_speed_dif)),1), 
+                                    round(vehr_mag*math.sin(math.radians(angle_speed_dif)),1))
                 self.states.append(round(v_rel_x/40,3))
                 self.states.append(round(v_rel_y/20,3))
-                self.states.append(self.world.get_map().get_waypoint(veh_loc, project_to_road = True).lane_id) # lane id ekleniyor
+                self.states.append(
+                    self.world.get_map().get_waypoint(
+                        veh_loc, project_to_road=True).lane_id)
         self.detect_overtake()
-        self.states.append(self.overtaked_vehicles*0.2)
-        self.states.append(bool(self.vehicle_off_the_road))   # Yoldan çkma eklendi
-        self.states.append(bool(self.collision))             # Çarpışma state'e input
+        self.states.append(self.overtook_vehicles*0.2)
+        # Vehicle off the road is added
+        self.states.append(bool(self.vehicle_off_the_road))
+        # Collision is added
+        self.states.append(bool(self.collision))
 
     
     def detect_overtake(self):
-        """sollanan araç sayısı belirlenecek"""
+        """Overtaken vehicles will be detected"""
 
         x1,y1 = self.current_location.x, self.current_location.y
-        x2,y2 = x1 + math.cos(math.radians(self.hero_yaw)),y1 + math.sin(math.radians(self.hero_yaw))
+        x2,y2 = (x1 + math.cos(math.radians(self.hero_yaw)),
+                 y1 + math.sin(math.radians(self.hero_yaw)))
         for vehicle in self.front_vehicle_list:
             overtake_veh_loc = vehicle.get_transform().location
-            overtake_veh_rot = vehicle.get_transform().rotation               #
-            x3,y3 = overtake_veh_loc.x, overtake_veh_loc.y               #sollanan aracın koor.
+            overtake_veh_rot = vehicle.get_transform().rotation   
+            # Coordinates of overtaken vehicle
+            x3,y3 = overtake_veh_loc.x, overtake_veh_loc.y
                
 
             yaw_dif_btw_veh = overtake_veh_rot.yaw - self.hero_yaw
-            dist_to_veh = self.current_location.distance(overtake_veh_loc) # araca mesafesi alınıyor
-            overtake_wp = self.world.get_map().get_waypoint(overtake_veh_loc,project_to_road = True)
-            idx = self.overtaked_candidates.index(None)
-            
-            _,angle_btw_veh = self.compute_magnitude_angle(overtake_veh_loc,self.current_location, self.hero_yaw)  #araçlar arasındaki açıyı verecek
-            if (dist_to_veh < 30 and angle_btw_veh<90 and overtake_wp.lane_id == -1 
-                and ((yaw_dif_btw_veh < 45 and yaw_dif_btw_veh > -45) or yaw_dif_btw_veh> 315) and 
+            # Distance between overtaken and hero vehicle is calculated
+            dist_to_veh = self.current_location.distance(overtake_veh_loc)
+            overtake_wp = self.world.get_map().get_waypoint(
+                overtake_veh_loc, project_to_road=True)
+            idx = self.overtook_candidates.index(None)
+
+            # Angle between vehicles             
+            _,angle_btw_veh = self.compute_magnitude_angle(
+                overtake_veh_loc, self.current_location, self.hero_yaw)
+            if (dist_to_veh < 30 and angle_btw_veh<90 
+                and overtake_wp.lane_id == -1 
+                and ((yaw_dif_btw_veh < 45 and yaw_dif_btw_veh > -45) 
+                     or yaw_dif_btw_veh> 315) and 
                 vehicle.id not in self.vehicle_ids):
                 self.vehicle_ids[idx] = vehicle.id
-                self.overtaked_candidates[idx] = vehicle
-               # print("**********detect overt - araç ekleniyor")
+                self.overtook_candidates[idx] = vehicle
+ 
             elif dist_to_veh > 40 and vehicle.id in self.vehicle_ids:
-                print("=== %s çıkartıldı"%vehicle.id)
-                remove_candidates = [x for x in self.overtaked_candidates if x is not None]
-                to_be_removed = [x for x in remove_candidates if x.id == vehicle.id]
-                print("çıkartılacak eleman %s tane"%len(to_be_removed))
-                index = self.overtaked_candidates.index(to_be_removed[0])
-                print("%s. araç çıkarıldı" %index)
-                self.overtaked_candidates[index] = None
+                print("%s is not overtook"%vehicle.id)
+                remove_candidates = [
+                    x for x in self.overtook_candidates if x is not None]
+                to_be_removed = [
+                    x for x in remove_candidates if x.id == vehicle.id]
+
+                index = self.overtook_candidates.index(to_be_removed[0])
+                print("%s. vehicle whisk away" %index)
+                self.overtook_candidates[index] = None
                 self.vehicle_ids[index] = 0
                 self.post_overtake_counter[index] = 0
                 self.mid_overtake_counter[index]  = 0
                 self.pre_overtake_counter[index]  = 0
                 self.flag_mid_overtake[index] = None
                 self.flag_pre_overtake[index] = None
-                # if ilgili yerdeki counter ve flagler de silinecek
-        for index,overtaken_vehicle in enumerate(self.overtaked_candidates):
-            """Sollama bitiş fazı, aracın önünde olduğumuz, şerit vb kriterlere bakılacak"""
+
+        for index,overtaken_vehicle in enumerate(self.overtook_candidates):
+            # Last phase for overtake detection
             if overtaken_vehicle is None:
                 continue
             overtaken_veh_loc = overtaken_vehicle.get_transform().location
-            overtaken_veh_rot = overtaken_vehicle.get_transform().rotation               #
-            x3,y3 = overtaken_veh_loc.x, overtaken_veh_loc.y                      #sollanan aracın koor.
-            self.overtake_region = np.sign((x2-x1)*(y3-y1)-(y2-y1)*(x3-x1))     #sollamanın hangi bölgede olduğunu belirtiyor       
-
+            overtaken_veh_rot = overtaken_vehicle.get_transform().rotation 
+            # Coordinates of overtaken vehicles
+            x3,y3 = overtaken_veh_loc.x, overtaken_veh_loc.y                      
+            # Region of the overtake
+            self.overtake_region = np.sign((x2-x1)*(y3-y1) - (y2-y1)*(x3-x1))
             yaw_dif_btw_veh = overtaken_veh_rot.yaw - self.hero_yaw
-            dist_to_veh = self.current_location.distance(overtaken_veh_loc) # araca mesafesi alınıyor
-            overtake_wp = self.world.get_map().get_waypoint(overtaken_veh_loc,project_to_road = True)
-        
-            _,angle_btw_veh = self.compute_magnitude_angle(overtaken_veh_loc,self.current_location, self.hero_yaw)  #araçlar arasındaki açıyı verecek
+            # Distance to vehicle
+            dist_to_veh = self.current_location.distance(overtaken_veh_loc) 
+            overtake_wp = self.world.get_map().get_waypoint(
+                overtaken_veh_loc, project_to_road=True)
+            # Angle between vehicles
+            _,angle_btw_veh = self.compute_magnitude_angle(
+                overtaken_veh_loc, self.current_location, self.hero_yaw)
             abs_angle_btw_veh = self.overtake_region*angle_btw_veh
-            # print("aktör%s"%overtaken_vehicle.id,"yaw sollanan %s derece" %overtaken_veh_rot.yaw,"hero yaw %s der" %self.hero_yaw)
-            # print("aktör%s"%overtaken_vehicle.id,"2) yaw dif %s derece" %yaw_dif_btw_veh,"araçlar arası mutlak açı %s der" %abs_angle_btw_veh)
-            """Sollama için 3. faz"""
-            if (dist_to_veh < 30 and angle_btw_veh > 130 and (overtake_wp.lane_id == -1) and ((yaw_dif_btw_veh < 40 and yaw_dif_btw_veh > -40) or yaw_dif_btw_veh> 320) and self.flag_mid_overtake[index] and self.current_waypoint.lane_id == -1):
+ 
+            if (dist_to_veh < 30 and angle_btw_veh > 130 
+                and (overtake_wp.lane_id == -1) 
+                and ((yaw_dif_btw_veh < 40 and yaw_dif_btw_veh > -40) 
+                     or yaw_dif_btw_veh> 320) and self.flag_mid_overtake[index] 
+                and self.current_waypoint.lane_id == -1):
                 self.post_overtake_counter[index] += 1
                 
-                print("£££££££££££  %s süre sonra sollama"%(self.clock.get_time() - self.last_overtake_time))
+                print("Overtake lasts %s seconds"
+                      %(self.clock.get_time() - self.last_overtake_time))
                 self.last_overtake_time = self.clock.get_time()
                 
-                print("detect overt - faz 3")
+                print("detect overtake - phase 3")
                 if self.post_overtake_counter[index] == 10:
-                    self.overtaked_vehicles += 1
-                    self.total_overtaked_vehicles += 1
-                    self.overtaked_candidates[index] = None
+                    self.overtook_vehicles += 1
+                    self.total_overtook_vehicles += 1
+                    self.overtook_candidates[index] = None
                     self.vehicle_ids[index] = 0
                     self.post_overtake_counter[index] = 0
                     self.mid_overtake_counter[index]  = 0
@@ -1213,87 +1265,96 @@ class World(object):
                     self.flag_mid_overtake[index] = None
                     self.flag_pre_overtake[index] = None
                 
-                    print("^^^^^^^^^^^^^^ detect overt - faz 3 - %s araç sollandı"% self.overtaked_vehicles,"kalan araçlar",self.overtaked_candidates)
-            # """Sollama için 2. faz"""
-            elif (30 < abs_angle_btw_veh or abs_angle_btw_veh < 140) and self.flag_pre_overtake[index]:
+                    print("%s vehicle overtaken"% self.overtook_vehicles,
+                          "Remaining vehicles: ",self.overtook_candidates)
+            # 2. phase for overtake
+            elif (30 < abs_angle_btw_veh or abs_angle_btw_veh < 140)      \
+                and self.flag_pre_overtake[index]:
+                    
                 self.mid_overtake_counter[index] += 1
-                # print("------ detect overt - faz 2")
+
                 if self.mid_overtake_counter[index] > 5:
                     self.flag_mid_overtake[index] = True
-                    # print("detect overt - faz 2 - flag true")
-       #     """Sollama için 1. faz"""
-            elif (dist_to_veh <30 and angle_btw_veh<50 and overtake_wp.lane_id == -1 
-                and ((yaw_dif_btw_veh < 50 and yaw_dif_btw_veh > -50) or yaw_dif_btw_veh> 310)):
+
+            # 1. phase for overtake
+            elif (dist_to_veh <30 and angle_btw_veh<50 
+                  and overtake_wp.lane_id == -1 
+                  and ((yaw_dif_btw_veh < 50 and yaw_dif_btw_veh > -50) 
+                       or yaw_dif_btw_veh> 310)):
                 self.pre_overtake_counter[index] += 1
-                # print("_-_-_-_-detect overt - faz 1")
                 if self.pre_overtake_counter[index] == 8:
                     self.flag_pre_overtake[index] = True
-                    # print("detect overt - faz 1 - flag true")
+
                     
     def world_to_pixel(self, location, offset=(0, 0)):
         """Converts the world coordinates to pixel coordinates"""
-        x = self.scale * self._pixels_per_meter * (location.x - self._world_offset[0])
-        y = self.scale * self._pixels_per_meter * (location.y - self._world_offset[1])
+        x = (self.scale 
+             * self._pixels_per_meter 
+             * (location.x - self._world_offset[0]))
+        y = (self.scale 
+             * self._pixels_per_meter 
+             * (location.y - self._world_offset[1]))
         return [int(x - offset[0]), int(y - offset[1])]
             
     def step(self,action):
-        """Action taken will be executed here and new state, reward etc. will be returned"""
+        """Action taken will be executed here and new state, reward etc. 
+        will be returned
+        """
 
-        # print(round(action[0],3),round(action[1],3), "%s araç sollandı"%self.total_overtaked_vehicles)
         clipped_action = np.clip(action,-1,1)
-        self.current_speed = math.sqrt(self.hero_actor.get_velocity().y**2+self.hero_actor.get_velocity().x**2)        
+        self.current_speed = math.sqrt(self.hero_actor.get_velocity().y**2 
+                                       + self.hero_actor.get_velocity().x**2)        
         self.states = []
-    #    print("kırpılmamış action",action,"action space",clipped_action)
-        """Throttle PPO dan buraya uygulanıyor"""
- #       self.target_speed = clipped_action[0]*15 + 15 #-1 ve 1 arasından 0 ve 30 m/s ye ölçeklendi
-        self.target_speed = max(clipped_action[0]*15 + 5, 0)#-1 ve 1 arasından 0 ve 30 m/s ye ölçeklendi
-      #  print(action[0],action[1])
+
+        # Requested target speed from PPO algorithm is implemented here
+        self.target_speed = max(clipped_action[0]*15 + 5, 0)
+
         if self.current_speed < self.target_speed:
-            self.throttle = min(1,max(0,(self.throttle + (self.target_speed - self.current_speed)*0.04)))
+            self.throttle = min(1, max(
+                0, (self.throttle + (self.target_speed-self.current_speed)*0.04)))
             self.brake = 0
 
         else:
-            self.throttle = min(1,max(0,(self.throttle - (self.current_speed - self.target_speed)*0.05)))
-            self.brake = min(1,max(0,(self.brake + (self.current_speed - self.target_speed)*0.04)))            
+            self.throttle = min(1, max(
+                0, (self.throttle - (self.current_speed-self.target_speed)*0.05)))
+            self.brake = min(1, max(
+                0,(self.brake + (self.current_speed-self.target_speed)*0.04)))            
 
            
         self.control1.throttle = self.throttle
         self.control1.brake = self.brake 
-                       
-        """Steer PPO dan buraya uygulanıyor"""
-        self.target_steer = clipped_action[1]*0.7 #-0.7 ve 0.7 arasına ölçeklendi        
-        if self.target_steer < self.current_steer:
-            self.current_steer = min(0.7,max(-0.7,(self.current_steer + (self.target_steer - self.current_steer)*0.4)))
-        else:
-            self.current_steer = min(0.7,max(-0.7,(self.current_steer + (self.target_steer - self.current_steer)*0.4)))
-
- 
-        self.control1.steer = self.current_steer
- 
-        self.control1.gear = 1
-     #   print("Hız %s"%round(clipped_action[0],3),"Çev_Hız %s"%round(self.target_speed,1),"Direks %s"%round(clipped_action[1],3),"Çev_Direk %s"%round(self.target_steer,1),print("baz test"))
-        self.hero_actor.apply_control(self.control1)
-        #self._input.control
-      #  print("PPO-pygame loop öncesi")
-        pygame_loop(self,self._hud, self._input, self.display, self.clock, self.COLOR_ALUMINIUM_4)
-        """Obs space için en yakın 5 araç""" 
-     #   print("PPO-nearby veh - öncesi")
-        self._sort_nearby_vehicles()
-    #    print("PPO-state space - öncesi")
-        self.state_space()
-        """Lane invasion için waypoint seçiliyor"""
-        self.current_waypoint = self.world.get_map().get_waypoint(self.wp_location, project_to_road = True)
-
-        self.observation_space=np.array(self.states)
-        # print("render waypoint önce")
-        """wawpointler basılacak ekrana"""
         
+        # Requested steer angle from PPO algorithm is implemented here
+        self.target_steer = clipped_action[1]*0.7 # Scaled between -0.7 ve 0.7      
+        if self.target_steer < self.current_steer:
+            self.current_steer = min(0.7, max(
+                -0.7, (self.current_steer + (self.target_steer-self.current_steer)*0.4)))
+        else:
+            self.current_steer = min(0.7, max(
+                -0.7, (self.current_steer + (self.target_steer - self.current_steer)*0.4)))
+
+        self.control1.steer = self.current_steer 
+        self.control1.gear = 1
+        self.hero_actor.apply_control(self.control1)
+
+        pygame_loop(self, self._hud, self._input, 
+                    self.display, self.clock, self.COLOR_ALUMINIUM_4)
+
+        # 5 nearest vehicles 5 state representation
+        self._sort_nearby_vehicles()
+
+        self.state_space()
+        # Closest waypoint is get for lane invasion.
+        self.current_waypoint = self.world.get_map().get_waypoint(
+            self.wp_location, project_to_road = True)
+
+        self.observation_space = np.array(self.states)
+
         self.states = np.clip(self.states,-1,1)
-        # print(self.states)
         self.obs = torch.tensor(self.states, dtype=torch.float)
-       # print(" --- step içi - tensöre döveh_locnüştürme ",self.obs,len(self.obs))
+
         self.rew = self.reward()
-        #"PPO-state space - sonrası")
+
         rew = 0
         new_state = None
         done = False
@@ -1302,11 +1363,16 @@ class World(object):
         if self.vehicle_off_the_road or self.collision:
             if self.collision:
                 aux_flag = self.determine_aux()    
-            if self.aux_rew_flag and self.collision and (self.dist_to_lane > -5.5) and self.angle_to_lane < 50: 
+            if (self.aux_rew_flag and self.collision 
+                and (self.dist_to_lane > -5.5) and self.angle_to_lane < 50): 
                 aux_reward = 1
-                print("aux_rew çalışıyor şerite %s"%self.dist_to_lane,"açı %s"%self.angle_to_lane,"col %s"%self.collision, "aux %s"%self.aux_rew_flag )
+                print("Aux rew for %s"%self.dist_to_lane, 
+                      "angle %s"%self.angle_to_lane,"col %s"%self.collision, 
+                      "aux %s"%self.aux_rew_flag)
             else:
-                print("aux_rew aktif olmadı şerite %s"%self.dist_to_lane,"açı %s"%self.angle_to_lane,"col %s"%self.collision, "aux %s"%self.aux_rew_flag )
+                print("Aux rew not active, dis. to lane: %s"%self.dist_to_lane,
+                      "angle %s"%self.angle_to_lane,"col %s"%self.collision, 
+                      "aux %s"%self.aux_rew_flag )
             if self.collision == True:
                 self.total_collision += 1
             else: 
@@ -1314,53 +1380,67 @@ class World(object):
             done = True
             self.collision = False
             self.vehicle_off_the_road = False            
-        return self.obs,self.rew,done,self.current_speed, self.total_overtaked_vehicles, self.total_collision, self.total_of_road, aux_reward
+        return (self.obs,self.rew,done,self.current_speed, 
+                self.total_overtook_vehicles, self.total_collision, 
+                self.total_of_road, aux_reward)
     def reward(self):
        # print(self.dist_to_lane,self.hero_actor.get_velocity().x)
-        rew_ovrtk = self.overtaked_vehicles * 0.2
+        rew_ovrtk = self.overtook_vehicles * 0.2
         rew_d2lane = -(abs(self.dist_to_lane)/6.4)*0.15
-        speed = math.sqrt(self.hero_actor.get_velocity().y**2+self.hero_actor.get_velocity().x**2)
-        rew_forw_speed = math.cos(math.radians(self.angle_to_lane))*(speed/40)*0.15 - abs(math.sin(math.radians(self.angle_to_lane))*(speed/40))*0.25
+        speed = math.sqrt(
+            self.hero_actor.get_velocity().y**2 
+            + self.hero_actor.get_velocity().x**2)
+        rew_forw_speed = (math.cos(math.radians(self.angle_to_lane))*(speed/40)*0.15 
+                          - abs(math.sin(math.radians(self.angle_to_lane))*(speed/40))*0.25)
 
-        rew_coll = self.collision * -2                        #çarpışma
-        rew_out_of_road = self.vehicle_off_the_road*-0.8      #yoldan çıkma
+        rew_coll = self.collision * -2                        
+        rew_out_of_road = self.vehicle_off_the_road*-0.8      
         rew_total= rew_ovrtk + rew_d2lane + rew_forw_speed + rew_coll + rew_out_of_road
         rew_total = round(rew_total,3)
-        # print("Rew %s"%rew_total)
-        #print("ovrtk %s"%rew_ovrtk,"dist2lane %s"%round(rew_d2lane,3),"tam hız %s"%round(speed,3),"AÇI %s"%round(self.angle_to_lane,3),"speed %s"%round(rew_forw_speed,3),"colision %s"%round(rew_coll,3),"out of road %s"%round(rew_out_of_road,3),"TOtal%s"%round(rew_total,3))
 
-        # print("---reward hatası",self.rew,self.dist_to_lane,self.hero_actor.get_velocity().y,self.hero_actor.get_velocity().x)
         return rew_total
     
     def determine_aux(self):
+        """Determination of auxiliary reward situation"""
+        # Auxiliary reward is in the trial phase.
+        # It's not part of the main PPO algorithm in any shape or form.
         vehicles= []
         for i in range(len(self.flag_mid_overtake)):
             if self.flag_mid_overtake[i] == True:
                 vehicles.append(i)
         x1,y1 = self.current_location.x, self.current_location.y
-        x2,y2 = x1 + math.cos(math.radians(self.hero_yaw)),y1 + math.sin(math.radians(self.hero_yaw))
+        x2,y2 = (x1 + math.cos(math.radians(self.hero_yaw)), 
+                 y1 + math.sin(math.radians(self.hero_yaw)))
         other_veh_loc = self.actor_we_collide_against.get_transform().location
         other_veh_rot = self.actor_we_collide_against.get_transform().rotation
                
         if len(vehicles)>0:
-            print("araçlar arası mesafe kontrol ediliyor")
+            # Distance between vehicles is checked
             for idx in vehicles:
-                v_loc = self.overtaked_candidates[idx].get_transform().location
-                v_rot = self.overtaked_candidates[idx].get_transform().rotation               #
-                x3,y3 = v_loc.x, v_loc.y                               #sollanan aracın koor.
-                veh_reg = np.sign((x2-x1)*(y3-y1)-(y2-y1)*(x3-x1))     #sollamanın hangi bölgede olduğunu belirtiyor       
-        
-             #   yaw_dif_btw_veh = overtaken_veh_rot.yaw - self.hero_yaw
-                dist_to_veh = self.current_location.distance(v_loc) # araca mesafesi alınıyor
-                o_veh_wp = self.world.get_map().get_waypoint(other_veh_loc,project_to_road = True)
-            
-                _,angle_btw_veh = self.compute_magnitude_angle(v_loc,self.current_location, self.hero_yaw)  #araçlar arasındaki açıyı verecek
+                v_loc = self.overtook_candidates[idx].get_transform().location
+                v_rot = self.overtook_candidates[idx].get_transform().rotation               #
+                x3,y3 = v_loc.x, v_loc.y       # Coor. of overtaken veh
+                # Region of overtaken veh
+                veh_reg = np.sign((x2-x1)*(y3-y1)-(y2-y1)*(x3-x1))            
+                # Distance to vehicle is calculated
+                dist_to_veh = self.current_location.distance(v_loc) 
+                o_veh_wp = self.world.get_map().get_waypoint(
+                    other_veh_loc,project_to_road = True)
+                # Angle between vehicles
+                _,angle_btw_veh = self.compute_magnitude_angle(
+                    v_loc, self.current_location, self.hero_yaw)  
                 abs_angle_btw_veh = veh_reg * angle_btw_veh
                 yaw_dif_btw_veh = other_veh_rot.yaw - self.hero_yaw
-                print("yaw açısı %s"%yaw_dif_btw_veh, "süre %s"%(self.last_overtake_time - pygame.time.Clock().get_time()))
-                if (0 < abs_angle_btw_veh or abs_angle_btw_veh < 180) and dist_to_veh < 30 and ((yaw_dif_btw_veh > 30 and yaw_dif_btw_veh < 180) or (yaw_dif_btw_veh > -180 and yaw_dif_btw_veh < -30)) :
+                print("Yaw angle %s"%yaw_dif_btw_veh, 
+                      "duration %s"%(
+                          self.last_overtake_time 
+                          - pygame.time.Clock().get_time()))
+                if ((0 < abs_angle_btw_veh or abs_angle_btw_veh < 180) 
+                    and dist_to_veh < 30 
+                    and ((yaw_dif_btw_veh > 30 and yaw_dif_btw_veh < 180) 
+                         or (yaw_dif_btw_veh > -180 and yaw_dif_btw_veh < -30))):
                     self.aux_rew_flag = True
-                    print("=================== sonunda aux rew aktif")
+
                         
 
             
@@ -1381,48 +1461,50 @@ class World(object):
                 veh_loc = vehicle.get_transform().location
                 veh_rot = vehicle.get_transform().rotation
                 x_h,y_h = self.current_location.x, self.current_location.y
-                x_v,y_v = x_h + math.cos(math.radians(self.hero_yaw)),y_h + math.sin(math.radians(self.hero_yaw))
+                x_v,y_v = (x_h + math.cos(math.radians(self.hero_yaw)), 
+                           y_h + math.sin(math.radians(self.hero_yaw)))
                 
-                nearby_region = np.sign((x_v-x_h)*(veh_loc.y-y_h)-(y_v-y_h)*(veh_loc.x-x_h))     #waypointin hangi bölgede olduğunu söylüyor
-
-                dist_to_n_veh = round(self.current_location.distance(veh_loc),3) # wp mesafesi alınıyor
-        
-                _,angle_btw_n_veh = self.compute_magnitude_angle(veh_loc,self.current_location, self.hero_yaw)  #araçlar arasındaki açıyı verecek
-                abs_angle_btw_n_veh = nearby_region*angle_btw_n_veh      
-                veh_rel_loc_x = round(math.cos(math.radians(abs_angle_btw_n_veh))*dist_to_n_veh,3)
-                veh_rel_loc_y = round(math.sin(math.radians(abs_angle_btw_n_veh))*dist_to_n_veh,3)
-             #   print("%s. veh"%vehicle.id," x %s ve" %veh_rel_loc_x," y %s"% veh_rel_loc_y,"mesafe %s"%dist_to_n_veh)
+                # Region of waypoint
+                nearby_region = np.sign(
+                    (x_v-x_h)*(veh_loc.y-y_h) - (y_v-y_h)*(veh_loc.x-x_h))
+                # Distance between waypoiny and vehicle
+                dist_to_n_veh = round(
+                    self.current_location.distance(veh_loc), 3) 
+                # Angle between vehicles
+                _,angle_btw_n_veh = self.compute_magnitude_angle(
+                    veh_loc, self.current_location, self.hero_yaw)  
+                abs_angle_btw_n_veh = nearby_region * angle_btw_n_veh      
+                veh_rel_loc_x = round(
+                    math.cos(math.radians(abs_angle_btw_n_veh)) * dist_to_n_veh, 3)
+                veh_rel_loc_y = round(
+                    math.sin(math.radians(abs_angle_btw_n_veh)) * dist_to_n_veh, 3)
                 
-                if (veh_rel_loc_x<60 and veh_rel_loc_x>-40) and (veh_rel_loc_y<20 and veh_rel_loc_y>-20):
+                if (veh_rel_loc_x<60 and veh_rel_loc_x>-40)           \
+                    and (veh_rel_loc_y<20 and veh_rel_loc_y>-20):
                     clipped_vehicle_list.append(vehicle)
-                
-          #  clipped_vehicle_list = [x for x in vehicle_list if x.get_location().distance(self.current_location)]
+
             def distance(v): return self.current_location.distance(v.get_location())
             for n, vehicle in enumerate(sorted(clipped_vehicle_list, key=distance)):
                 if n > 15:
                     break
                 self.sorted_vehicle_list.append(vehicle)
-        #    print("!!!! Araç arası mesafe %s" %self.sorted_vehicle_list[0].get_transform().location.distance(self.hero_transform.location))
-   
-           # print("???? Compute ile Araç arası mesafe %s" %dist_btw_veh)
-            """sıralanan araçların 4 önde 1 arkada olmak üzere seçimi için araçlar arasındaki açılar hesaplanır"""
-            for i in range(min(15,len(self.sorted_vehicle_list))):
-                dist_btw_veh,angle_btw_veh = self.compute_magnitude_angle(self.sorted_vehicle_list[0].get_transform().location,self.current_location, self.hero_yaw)               
-                self.target_location = self.sorted_vehicle_list[i].get_transform().location                
-                dist_btw_veh,angle_btw_veh = self.compute_magnitude_angle(self.target_location,self.current_location, self.hero_yaw)
-             #   print("araçla olan mesafe %s kadardır" %dist_btw_veh)
+            # Among the closest vehicles 4 vehicles are selected from front
+            # 1 vehicle is selected from behind of the vehicle
+
+            for i in range(min(15, len(self.sorted_vehicle_list))):
+                dist_btw_veh,angle_btw_veh = self.compute_magnitude_angle(
+                    self.sorted_vehicle_list[0].get_transform().location, 
+                    self.current_location, self.hero_yaw)               
+                self.target_location = self.sorted_vehicle_list[i].get_transform().location              
+                dist_btw_veh,angle_btw_veh = self.compute_magnitude_angle(
+                    self.target_location,self.current_location, self.hero_yaw)
+
                 if angle_btw_veh < 100:
                     self.front_vehicle_list.append(self.sorted_vehicle_list[i])
                 else:
                     self.rear_vehicle_list.append(self.sorted_vehicle_list[i])
-            # for i, vehicle in enumerate(sorted(self.front_vehicle_list, key=distance)):
-            #  #   #distance)
-            #     if n > 15:
-            #         break
-            # for j, vehicle in enumerate(sorted(self.rear_vehicle_list, key=distance)):
-            #     if n > 15:
-            #         break  
-            """arka ve öndeki araçlar ekleniyor"""
+
+            # Vehicles in the front and back are added
             for k in range(min(len(self.front_vehicle_list),4)):
                 self.nearby_vehicles.append(self.front_vehicle_list[k])
             if len(self.front_vehicle_list)<4:
@@ -1435,15 +1517,20 @@ class World(object):
                     self.nearby_vehicles.append("none_rear") 
              
     def compute_magnitude_angle(self, target_location,current_location, current_yaw):
-        """Compute relative angle and distance between a target_location and a current_location
+        """Compute relative angle and distance between a target_location and a 
+        current_location
             :param orientation: orientation of the reference object
-            :return: a tuple composed by the distance to the object and the angle between both objects
+            :return: a tuple composed by the distance to the object and the 
+        angle between both objects
         """
-        target_vector = np.array([target_location.x -  current_location.x, target_location.y -  current_location.y])
+        target_vector = np.array([target_location.x -  current_location.x, 
+                                  target_location.y -  current_location.y])
         norm_target = np.linalg.norm(target_vector)
     
-        dist_btw_veh = np.array([math.cos(math.radians(current_yaw)), math.sin(math.radians(current_yaw))])
-        angle_btw_veh = math.degrees(math.acos(np.clip(np.dot(dist_btw_veh, target_vector) / norm_target, -1., 1.)))
+        dist_btw_veh = np.array([math.cos(math.radians(current_yaw)), 
+                                 math.sin(math.radians(current_yaw))])
+        angle_btw_veh = math.degrees(math.acos(np.clip(
+            np.dot(dist_btw_veh, target_vector) / norm_target, -1., 1.)))
 
         return (dist_btw_veh, angle_btw_veh)      
     def reset(self):
@@ -1452,38 +1539,34 @@ class World(object):
         vehicles = [actor for actor in self.world.get_actors()
                           if 'vehicle' in actor.type_id]        
  
-        self.client.apply_batch([carla.command.DestroyActor(x) for x in vehicles])
+        self.client.apply_batch(
+            [carla.command.DestroyActor(x) for x in vehicles])
         
-       # """araçlar her reset dendiğinde yok ediliyor""" 
-                
+       # Vehicles are destroyed after every reset                
         self.vehicles = []
         if self.hero_transform is not None:
             self.hero_transform = None
-                              
-        #self.vehicles,len(self.vehicles),"araçlar yok edildi mi?")
+
         self.select_hero_actor()
         self._spawn_vehicles()
         self.aux_rew_flag = False
         
         self.states =[0 for i in range(49)]
-        self.overtaked_candidates = [None for i in range(15)]
+        self.overtook_candidates = [None for i in range(15)]
         self.vehicle_ids = [0 for i in range(15)]
         self.post_overtake_counter = [0 for i in range(15)]
         self.mid_overtake_counter  = [0 for i in range(15)]
         self.pre_overtake_counter = [0 for i in range(15)]
         self.flag_mid_overtake = [None for i in range(15)]
         self.flag_pre_overtake = [None for i in range(15)]
-        self.overtaked_vehicles = 0
+        self.overtook_vehicles = 0
 
         self.target_speed = 0
         self.current_steer = 0
         self.brake = 0
         self.throttle = 1
         
-        # print("Env - reset - obs torch")
         self.obs = torch.tensor(self.states, dtype=torch.float)
-        # print("Env - reset - obs torch",self.obs)
-        #"reset fonksiyonu")
         return self.obs
 
     def _get_data_from_carla(self):
@@ -1507,14 +1590,16 @@ class World(object):
             exit_game()
 
     def start(self, hud, input_control, display, clock, COLOR_ALUMINIUM_4):
-        """Build the map image, stores the needed modules and prepares rendering in Hero Mode"""
+        """Build the map image, stores the needed modules and prepares 
+        rendering in Hero Mode
+        """
         self.world, self.town_map = self._get_data_from_carla()
-        #"start metodu")
+
         self.settings = self.world.get_settings()
        # settings.no_rendering_mode = self.args.no_rendering
         self.settings.no_rendering_mode = True
-        # settings.synchronous_mode = True # eklendi
-        # settings.fixed_delta_seconds = 0.05 # eklendi
+        # settings.synchronous_mode = True      # Added
+        # settings.fixed_delta_seconds = 0.05   # Added
         self.world.apply_settings(self.settings)
 
         # Create Surfaces
@@ -1539,27 +1624,35 @@ class World(object):
         self.prev_scaled_size = int(self.surface_size)
 
         # Render Actors
-        self.actors_surface = pygame.Surface((self.map_image.surface.get_width(), self.map_image.surface.get_height()))
+        self.actors_surface = pygame.Surface(
+            (self.map_image.surface.get_width(), 
+             self.map_image.surface.get_height()))
         self.actors_surface.set_colorkey(COLOR_BLACK)
 
-        self.vehicle_id_surface = pygame.Surface((self.surface_size, self.surface_size)).convert()
+        self.vehicle_id_surface = pygame.Surface(
+            (self.surface_size, self.surface_size)).convert()
         self.vehicle_id_surface.set_colorkey(COLOR_BLACK)
 
-        self.border_round_surface = pygame.Surface(self._hud.dim, pygame.SRCALPHA).convert()
+        self.border_round_surface = pygame.Surface(self._hud.dim, 
+                                                   pygame.SRCALPHA).convert()
         self.border_round_surface.set_colorkey(COLOR_WHITE)
         self.border_round_surface.fill(COLOR_BLACK)
 
         # Used for Hero Mode, draws the map contained in a circle with white border
         center_offset = (int(self._hud.dim[0] / 2), int(self._hud.dim[1] / 2))
-        pygame.draw.circle(self.border_round_surface, COLOR_ALUMINIUM_1, center_offset, int(self._hud.dim[1] / 2))
-        pygame.draw.circle(self.border_round_surface, COLOR_WHITE, center_offset, int((self._hud.dim[1] - 8) / 2))
+        pygame.draw.circle(self.border_round_surface, COLOR_ALUMINIUM_1, 
+                           center_offset, int(self._hud.dim[1] / 2))
+        pygame.draw.circle(self.border_round_surface, COLOR_WHITE, 
+                           center_offset, int((self._hud.dim[1] - 8) / 2))
 
-        """waypoint çizme"""
-        
+
+        # Waypoints are drawen        
         scaled_original_size = self.original_surface_size * (1.0 / 0.9)
-        self.hero_surface = pygame.Surface((scaled_original_size, scaled_original_size)).convert()
+        self.hero_surface = pygame.Surface((scaled_original_size, 
+                                            scaled_original_size)).convert()
 
-        self.result_surface = pygame.Surface((self.surface_size, self.surface_size)).convert()
+        self.result_surface = pygame.Surface((self.surface_size, 
+                                              self.surface_size)).convert()
         self.result_surface.set_colorkey(COLOR_BLACK)
 
         # Start hero mode by default
@@ -1570,63 +1663,68 @@ class World(object):
 
         # Register event for receiving server tick
         weak_self = weakref.ref(self)
-        self.world.on_tick(lambda timestamp: World.on_world_tick(weak_self, timestamp))
+        self.world.on_tick(
+            lambda timestamp: World.on_world_tick(weak_self, timestamp))
 
  
     def _spawn_vehicles(self):
         """spawn roaming veh"""
       
         # Get a random blueprint.
-       # #self.world.get_blueprint_library())
-        blueprint = random.choice(self.world.get_blueprint_library().filter('mustang'))
+        # self.world.get_blueprint_library())
+        blueprint = random.choice(
+            self.world.get_blueprint_library().filter('mustang'))
 
         blueprint.set_attribute('role_name', 'vehicle')
         if blueprint.has_attribute('color'):
-            color = random.choice(blueprint.get_attribute('color').recommended_values)
+            color = random.choice(
+                blueprint.get_attribute('color').recommended_values)
             blueprint.set_attribute('color', color)
         # Spawn the player.
 
-        spawn_points = self.world.get_map().get_spawn_points() #filter(road_id == 10)
+        spawn_points = self.world.get_map().get_spawn_points()  #filter(road_id == 10)
         # for sp in spawn_points:
             # npc_spawn_points =[ sp for sp in spawn_points if sp.location.x<190] #  and  sp.location.y<-100] # # 50,240
-        """Çevre araçları burada üretiliyor"""
+        # Surrounding vehicles spawned here
         for i in range(80):
 
-            spawn_point = random.choice(spawn_points) if spawn_points else carla.Transform()
+            spawn_point = [random.choice(spawn_points) 
+                           if spawn_points else carla.Transform()]
             vehicles_npc = self.world.try_spawn_actor(blueprint, spawn_point)
-            # self.vehicle_transform = self.vehicles_npc.get_transform() Render probleminde düşünülebilir
+            # self.vehicle_transform = self.vehicles_npc.get_transform()
             if vehicles_npc is not None:
                 vehicles_npc.set_autopilot(True)
-                self.spawned_vehicles.append(vehicles_npc)
-        #"çevre araçları ekleme")
-        
-        
-
+                self.spawned_vehicles.append(vehicles_npc)     
         # Save it in order to destroy it when closing program
         self.spawned_vehicles.append(self.vehicles_npc)
 
     def select_hero_actor(self):
-        """Selects only one hero actor if there are more than one. If there are not any, it will spawn one."""
+        """Selects only one hero actor if there are more than one. If there are 
+        not any, it will spawn one.
+        """
         hero_vehicles = [actor for actor in self.world.get_actors()
-                         if 'vehicle' in actor.type_id and actor.is_alive and actor.attributes['role_name'] == 'hero']
-        #hero_vehicles,len(hero_vehicles),"hero vehicles")
+                         if 'vehicle' in actor.type_id and actor.is_alive 
+                             and actor.attributes['role_name'] == 'hero']
+
         if len(hero_vehicles) > 0:
-            #hero_vehicles[0].is_alive,"select_hero_actor - fonk - if içinde")         
-            self.client.apply_batch([carla.command.DestroyActor(x) for x in hero_vehicles])
+      
+            self.client.apply_batch(
+                [carla.command.DestroyActor(x) for x in hero_vehicles])
             self._spawn_hero()
 
         else:
-            #Spawning the hero, it will be better to put a print
-            #"Hero otomatik spawnlanıyor,select_hero_actor - else içnde")
+            #Spawning the hero
             self._spawn_hero()          
 
     def _spawn_hero(self):
         """Spawns the hero actor when the script runs"""
         # Get a random blueprint.
-        blueprint = random.choice(self.world.get_blueprint_library().filter('mustang'))
+        blueprint = random.choice(
+            self.world.get_blueprint_library().filter('mustang'))
         blueprint.set_attribute('role_name', 'hero')
         if blueprint.has_attribute('color'):
-            color = random.choice(blueprint.get_attribute('color').recommended_values)
+            color = random.choice(
+                blueprint.get_attribute('color').recommended_values)
             blueprint.set_attribute('color', color)
         # Spawn the player.
         self.hero_actor = None
@@ -1634,34 +1732,44 @@ class World(object):
         spawn_points = self.world.get_map().get_spawn_points()
         
         spawn_point = random.choice(spawn_points) if spawn_points else carla.Transform()
-        hero_spawn_point = carla.Transform(carla.Location(x=-201.7,y=-227,z=1),carla.Rotation(yaw=90))
+        hero_spawn_point = carla.Transform(
+            carla.Location(x=-201.7,y=-227,z=1),carla.Rotation(yaw=90))
         # hero_spawn_point = carla.Transform(carla.Location(x=-90,y=121, z=1),carla.Rotation(yaw=7)) #3. parkur x=-98,y=120,yaw=7 ikinci parkur x=-119,y=117 yaw=7 birinci parkur -202,5, -19, 88.4 #son parkur x=-201.7,y=-227,z=1 yaw=90
         self.hero_actor = self.world.try_spawn_actor(blueprint, hero_spawn_point)
         self.hero_transform = self.hero_actor.get_transform()
-        
-        """colliison and lane invasion sensors are added"""
-        blueprint_collision_sens = self.world.get_blueprint_library().find('sensor.other.collision')
-        self.collision_sensor = self.world.spawn_actor(blueprint_collision_sens,self.hero_transform,attach_to = self.hero_actor)        
-        self.collision_sensor.listen(lambda event: self.collision_callback(event))
 
-        blueprint_lane_invasion_sens = self.world.get_blueprint_library().find('sensor.other.lane_invasion')
-        self.lane_invasion_sensor = self.world.spawn_actor(blueprint_lane_invasion_sens,self.hero_transform,attach_to = self.hero_actor)        
-        self.lane_invasion_sensor.listen(lambda event: self.lane_invasion_callback(event))
-        """render edilebilmesi için waypoiny"""
+        # Collision and lane invasion sensors are added
+        blueprint_collision_sens = self.world.get_blueprint_library().find('sensor.other.collision')
+        self.collision_sensor = self.world.spawn_actor(
+            blueprint_collision_sens, 
+            self.hero_transform, attach_to=self.hero_actor)        
+        self.collision_sensor.listen(
+            lambda event: self.collision_callback(event))
+
+        blueprint_lane_invasion_sens = self.world.get_blueprint_library().find(
+            'sensor.other.lane_invasion')
+        self.lane_invasion_sensor = self.world.spawn_actor(
+            blueprint_lane_invasion_sens, 
+            self.hero_transform, attach_to=self.hero_actor)        
+        self.lane_invasion_sensor.listen(
+            lambda event: self.lane_invasion_callback(event))
+
         self.wp_location = self.hero_transform.location
-        self.current_waypoint = self.world.get_map().get_waypoint(self.wp_location, project_to_road = True)
+        self.current_waypoint = self.world.get_map().get_waypoint(
+            self.wp_location, project_to_road=True)
         self.wp1 = None
         # Save it in order to destroy it when closing program
         self.spawned_vehicles.append(self.hero_actor)
         self.spawned_vehicles.append(self.collision_sensor)
 
     def collision_callback(self, event):
+        """Determine the collision and intensity"""
         self.actor_we_collide_against = event.other_actor
         impulse = event.normal_impulse
         intensity = math.sqrt(impulse.x**2 + impulse.y**2 + impulse.z**2)
-       # print(event, "çarpışma", self.actor_we_collide_against,"event", impulse,"şiddeti" ,intensity)
+
         if event and intensity>300:
-            print("#### araç bir yere %s ile çarptı" %intensity)
+            print("Vehicle has collided with %s intensity" %intensity)
             self.collision = True
             self.collision_frame = event.frame
     def lane_invasion_callback(self, event):
@@ -1671,25 +1779,33 @@ class World(object):
 
         
     def tick(self, clock):
-        """Retrieves the actors for Hero and Map modes and updates de HUD based on that"""
-     #   #self.world)   
+        """Retrieves the actors for Hero and Map modes and updates 
+        the HUD based on that
+        """
+
         actors = self.world.get_actors()
 
         # We store the transforms also so that we avoid having transforms of
         # previous tick and current tick when rendering them.
-        self.actors_with_transforms = [(actor, actor.get_transform()) for actor in actors]
+        self.actors_with_transforms = [
+            (actor, actor.get_transform()) for actor in actors
+        ]
         if self.hero_actor is not None:
             self.hero_transform = self.hero_actor.get_transform()
 
         self.update_hud_info(clock)
 
     def update_hud_info(self, clock):
-        """Updates the HUD info regarding simulation, hero mode and whether there is a traffic light affecting the hero actor"""
+        """Updates the HUD info regarding simulation, hero mode and whether 
+        there is a traffic light affecting the hero actor
+        """
 
         hero_mode_text = []
         if self.hero_actor is not None:
             hero_speed = self.hero_actor.get_velocity()
-            hero_speed_text = 3.6 * math.sqrt(hero_speed.x ** 2 + hero_speed.y ** 2 + hero_speed.z ** 2)
+            hero_speed_text = 3.6 * math.sqrt(hero_speed.x**2 
+                                              + hero_speed.y**2 
+                                              + hero_speed.z**2)
 
             affected_traffic_light_text = 'None'
             if self.affected_traffic_light is not None:
@@ -1707,7 +1823,8 @@ class World(object):
             hero_mode_text = [
                 'Hero Mode:                 ON',
                 'Hero ID:              %7d' % self.hero_actor.id,
-                'Hero Vehicle:  %14s' % get_actor_display_name(self.hero_actor, truncate=14),
+                'Hero Vehicle:  %14s' % get_actor_display_name(self.hero_actor, 
+                                                               truncate=14),
                 'Hero Speed:          %3d km/h' % hero_speed_text,
                 'Hero Affected by:',
                 '  Traffic Light: %12s' % affected_traffic_light_text,
@@ -1744,7 +1861,9 @@ class World(object):
         info_text = []
         if self.hero_actor is not None and len(vehicles) > 1:
             location = self.hero_transform.location
-            vehicle_list = [x[0] for x in vehicles if x[0].id != self.hero_actor.id]
+            vehicle_list = [
+                x[0] for x in vehicles if x[0].id != self.hero_actor.id
+            ]
 
             def distance(v): return location.distance(v.get_location())
             for n, vehicle in enumerate(sorted(vehicle_list, key=distance)):
@@ -1775,7 +1894,9 @@ class World(object):
         return (vehicles, traffic_lights, speed_limits, walkers)
 
     def _render_traffic_lights(self, surface, list_tl, world_to_pixel):
-        """Renders the traffic lights and shows its triggers and bounding boxes if flags are enabled"""
+        """Renders the traffic lights and shows its triggers and bounding 
+        boxes if flags are enabled
+        """
         self.affected_traffic_light = None
 
         for tl in list_tl:
@@ -1795,7 +1916,8 @@ class World(object):
                 transformed_tv = tl_t.transform(tl.trigger_volume.location)
                 hero_location = self.hero_actor.get_location()
                 d = hero_location.distance(transformed_tv)
-                s = Util.length(tl.trigger_volume.extent) + Util.length(self.hero_actor.bounding_box.extent)
+                s = (Util.length(tl.trigger_volume.extent) 
+                     + Util.length(self.hero_actor.bounding_box.extent))
                 if (d <= s):
                     # Highlight traffic light
                     self.affected_traffic_light = tl
@@ -1806,7 +1928,9 @@ class World(object):
             surface.blit(srf, srf.get_rect(center=pos))
 
     def _render_speed_limits(self, surface, list_sl, world_to_pixel, world_to_pixel_width):
-        """Renders the speed limits by drawing two concentric circles (outer is red and inner white) and a speed limit text"""
+        """Renders the speed limits by drawing two concentric circles 
+        (outer is red and inner white) and a speed limit text
+        """
 
         font_size = world_to_pixel_width(2)
         radius = world_to_pixel_width(2)
@@ -1820,7 +1944,8 @@ class World(object):
             white_circle_radius = int(radius * 0.75)
 
             pygame.draw.circle(surface, COLOR_SCARLET_RED_1, (x, y), radius)
-            pygame.draw.circle(surface, COLOR_ALUMINIUM_0, (x, y), white_circle_radius)
+            pygame.draw.circle(
+                surface, COLOR_ALUMINIUM_0, (x, y), white_circle_radius)
 
             limit = sl.type_id.split('.')[2]
             font_surface = font.render(limit, True, COLOR_ALUMINIUM_5)
@@ -1841,7 +1966,7 @@ class World(object):
             else:
                 # In map mode, there is no need to rotate the text of the speed limit
                 surface.blit(font_surface, (x - radius / 2, y - radius / 2))
-            """waypoint ekrana"""    
+            # Waypoints will be drawn    
             x1,y1 = world_to_pixel(self.current_waypoint.transform.location)
             
             # Render speed limit concentric circles
@@ -1852,26 +1977,31 @@ class World(object):
    
         hero_loc = self.hero_transform.location
         x0,y0 = world_to_pixel(hero_loc)
-        for idx, vehicle in enumerate(self.overtaked_candidates):
+        for idx, vehicle in enumerate(self.overtook_candidates):
             if vehicle is None:  
                 continue
             else:  
-                font_surface = font.render(str(vehicle.id), True, COLOR_ALUMINIUM_5)
+                font_surface = font.render(
+                    str(vehicle.id), True, COLOR_ALUMINIUM_5)
                 x,y = world_to_pixel(vehicle.get_transform().location) 
                 self.actors_surface.blit(font_surface, (x, y))
                 vertices = [(x,y),(x0, y0)]
 
-                pygame.draw.lines(surface, COLOR_SCARLET_RED_1, False, vertices, 4)
+                pygame.draw.lines(
+                    surface, COLOR_SCARLET_RED_1, False, vertices, 4)
         for idx, vehicle in enumerate(self.nearby_vehicles):
             if vehicle == "none_front" or vehicle == "none_rear":  
                 continue
             else:  
-                font_surface = font.render(str(vehicle.id), True, COLOR_ALUMINIUM_5)
+                font_surface = font.render(
+                    str(vehicle.id), True, COLOR_ALUMINIUM_5)
                 x,y = world_to_pixel(vehicle.get_transform().location) 
                 self.actors_surface.blit(font_surface, (x, y))
                 vertices = [(x,y),(x0, y0)]
 
-                pygame.draw.lines(surface, COLOR_SKY_BLUE_0, False, vertices, 1)        
+                pygame.draw.lines(
+                    surface, COLOR_SKY_BLUE_0, False, vertices, 1)  
+                
     def _render_walkers(self, surface, list_w, world_to_pixel):
         """Renders the walkers' bounding boxes"""
         for w in list_w:
@@ -1909,13 +2039,16 @@ class World(object):
                        ]
             v[1].transform(corners)
             corners = [world_to_pixel(p) for p in corners]
-            pygame.draw.lines(surface, color, False, corners, int(math.ceil(4.0 * self.map_image.scale)))
+            pygame.draw.lines(surface, color, False, corners, 
+                              int(math.ceil(4.0 * self.map_image.scale)))
 
     def render_actors(self, surface, vehicles, traffic_lights, speed_limits, walkers):
         """Renders all the actors"""
         # Static actors
-        self._render_traffic_lights(surface, [tl[0] for tl in traffic_lights], self.map_image.world_to_pixel)
-        self._render_speed_limits(surface, [sl[0] for sl in speed_limits], self.map_image.world_to_pixel,
+        self._render_traffic_lights(surface, [tl[0] for tl in traffic_lights], 
+                                    self.map_image.world_to_pixel)
+        self._render_speed_limits(surface, [sl[0] for sl in speed_limits], 
+                                  self.map_image.world_to_pixel,
                                   self.map_image.world_to_pixel_width)
         self.render_waypoints(self.map_image.world_to_pixel)
 
@@ -1925,27 +2058,37 @@ class World(object):
 
     def render_waypoints(self, world_to_pixel):
         """5 tane sıralanmış waypointi ekrana basıyor"""
-      #  print("sorted wp if öncesi", self.sorted_waypoints, len(self.sorted_waypoints), bool(self.sorted_waypoints))
+ 
         if bool(self.sorted_waypoints):
-         #   print("sorted wp if sonrası", self.sorted_waypoints, len(self.sorted_waypoints), bool(self.sorted_waypoints))
+
             for idx, waypoint in enumerate(self.sorted_waypoints):
                # print(idx,waypoint)
                 x1,y1 = world_to_pixel(waypoint.transform.location)
                 #print("x1,y1",x1,y1)
-                pygame.draw.circle(self.actors_surface, (COLOR_WHITE if idx != 1 or idx != 0 else COLOR_WHITE), (x1, y1), 4) 
+                pygame.draw.circle(
+                    self.actors_surface, 
+                    (COLOR_WHITE if idx != 1 or idx != 0 else COLOR_WHITE), 
+                    (x1, y1), 4) 
             x1,y1 = world_to_pixel(self.first_waypoint.transform.location)
             x2,y2 = world_to_pixel(self.second_waypoint.transform.location)
-            pygame.draw.circle(self.actors_surface, COLOR_SKY_BLUE_0, (x1, y1), 4)
-            pygame.draw.circle(self.actors_surface, COLOR_SCARLET_RED_1, (x2, y2), 4)
+            pygame.draw.circle(
+                self.actors_surface, COLOR_SKY_BLUE_0, (x1, y1), 4)
+            pygame.draw.circle(
+                self.actors_surface, COLOR_SCARLET_RED_1, (x2, y2), 4)
 
     def clip_surfaces(self, clipping_rect):
-        """Used to improve perfomance. Clips the surfaces in order to render only the part of the surfaces that are going to be visible"""
+        """Used to improve perfomance. Clips the surfaces in order to 
+        render only the part of the surfaces that are going to be visible
+        """
         self.actors_surface.set_clip(clipping_rect)
         self.vehicle_id_surface.set_clip(clipping_rect)
         self.result_surface.set_clip(clipping_rect)
 
     def _compute_scale(self, scale_factor):
-        """Based on the mouse wheel and mouse position, it will compute the scale and move the map so that it is zoomed in or out based on mouse position"""
+        """Based on the mouse wheel and mouse position, 
+        it will compute the scale and move the map so that it is zoomed in 
+        or out based on mouse position
+        """
         m = self._input.mouse_pos
 
         # Percentage of surface where mouse position is actually
@@ -1954,8 +2097,10 @@ class World(object):
 
         # Offset will be the previously accumulated offset added with the
         # difference of mouse positions in the old and new scales
-        diff_between_scales = ((float(self.prev_scaled_size) * px) - (float(self.scaled_size) * px),
-                               (float(self.prev_scaled_size) * py) - (float(self.scaled_size) * py))
+        diff_between_scales = ((float(self.prev_scaled_size) * px) 
+                               - (float(self.scaled_size) * px),
+                               (float(self.prev_scaled_size) * py) 
+                               - (float(self.scaled_size) * py))
 
         self.scale_offset = (self.scale_offset[0] + diff_between_scales[0],
                              self.scale_offset[1] + diff_between_scales[1])
@@ -1992,7 +2137,8 @@ class World(object):
 
         # Render Ids
         self._hud.render_vehicles_ids(self.vehicle_id_surface, vehicles,
-                                      self.map_image.world_to_pixel, self.hero_actor, self.hero_transform)
+                                      self.map_image.world_to_pixel, 
+                                      self.hero_actor, self.hero_transform)
         # Show nearby actors from hero mode
         self._show_nearby_vehicles(vehicles)
 
@@ -2059,7 +2205,8 @@ class World(object):
             self.settings.no_rendering_mode = False
             self.world.apply_settings(self.settings)
             actors = self.world.get_actors()
-            self.client.apply_batch([carla.command.DestroyActor(x) for x in actors])
+            self.client.apply_batch(
+                [carla.command.DestroyActor(x) for x in actors])
             #self.client.apply_batch([carla.command.DestroyActor(x) for x in self.spawned_vehicles])
 
 # ==============================================================================
@@ -2114,11 +2261,10 @@ class InputControl(object):
                 elif event.key == K_TAB:
                     # Toggle between hero and map mode
                     if self._world.hero_actor is None:
-                        self._world.select_hero_actor() # Bu noktada ışınlanan araç seçiliyor
+                        self._world.select_hero_actor() 
                         self.wheel_offset = HERO_DEFAULT_SCALE
                         self.control = carla.VehicleControl()
                         self._hud.notification('Hero Modes K_Tab')
-                        #"K_Tab basılmasa dahi aktif oluyor")
                     else:
                         self.wheel_offset = MAP_DEFAULT_SCALE
                         self.mouse_offset = [0, 0]
@@ -2143,7 +2289,7 @@ class InputControl(object):
                         self.control.gear = max(-1, self.control.gear - 1)
                     elif self.control.manual_gear_shift and event.key == K_PERIOD:
                         self.control.gear = self.control.gear + 1
-                    elif event.key == K_p: # P tuşuna basılınca otopilot devreye giriyor
+                    elif event.key == K_p:
                         # Toggle autopilot
                         if self._world.hero_actor is not None:
                             self._autopilot_enabled = not self._autopilot_enabled
@@ -2163,24 +2309,23 @@ class InputControl(object):
     def _parse_keys(self, milliseconds):
         """Parses keyboard input when keys are pressed"""
         keys = pygame.key.get_pressed()
-        self.control.throttle = 1 if keys[K_UP] or keys[K_w] else 0.0  # Bunlarda continuous action çıkar mı?
+        self.control.throttle = 1 if keys[K_UP] or keys[K_w] else 0.0
         steer_increment = 5e-4 * milliseconds
         if keys[K_LEFT] or keys[K_a]:
             self._steer_cache -= steer_increment
-           # #"direksiyon sola")
+        # Steer left
         elif keys[K_RIGHT] or keys[K_d]:
             self._steer_cache += steer_increment
-          #  #"direksiyon sağaa")
+        # Steer right
         else:
             self._steer_cache = 0.0
         self._steer_cache = min(0.7, max(-0.7, self._steer_cache))
         self.control.steer = round(self._steer_cache, 1)
         self.control.brake = 1.0 if keys[K_DOWN] or keys[K_s] else 0.0
         self.control.hand_brake = keys[K_SPACE]
-        ##"5. _parse_keys")
+
     def _parse_mouse(self):
         """Parses mouse input"""
-     #   #"4. parse_mouse")
         if pygame.mouse.get_pressed()[0]:
             x, y = pygame.mouse.get_pos()
             self.mouse_offset[0] += (1.0 / self.wheel_offset) * (x - self.mouse_pos[0])
@@ -2189,7 +2334,7 @@ class InputControl(object):
 
     def parse_input(self, clock):
         """Parses the input, which is classified in keyboard events and mouse"""
-      #  #"2. parse_input")
+
         self._parse_events()
         self._parse_mouse()
         if not self._autopilot_enabled:   
@@ -2199,7 +2344,7 @@ class InputControl(object):
             if (self._world.hero_actor is not None):
                 # pass
                 self._world.hero_actor.apply_control(self.control)
-               # #"kontrol uygulanıyor", self._world.hero_actor,"input_control",self.control)
+ 
                    
     @staticmethod
     def _is_quit_shortcut(key):
@@ -2207,152 +2352,11 @@ class InputControl(object):
         return (key == K_ESCAPE) or (key == K_q and pygame.key.get_mods() & KMOD_CTRL)
 
 
-# ==============================================================================
-# -- Game Loop ---------------------------------------------------------------
-# ==============================================================================
-
-
-def game_loop(args):
-    """Initialized, Starts and runs all the needed modules for No Rendering Mode"""
-    try:
-        # Init pygame
-        pygame.init()
-        display = pygame.display.set_mode(
-            (args.width, args.height),
-            pygame.HWSURFACE | pygame.DOUBLEBUF)
- 
-        # Place a title to game window
-        pygame.display.set_caption(args.description)
-
-        # Show loading screen
-        font = pygame.font.Font(pygame.font.get_default_font(), 20)
-        text_surface = font.render('Rendering map...', True, COLOR_WHITE)        
-        display.blit(text_surface, text_surface.get_rect(center=(args.width / 2, args.height / 2)))
-        pygame.display.flip()        
-        # Init
-        input_control = InputControl(TITLE_INPUT)        # input kontrol nesnesi
-        hud = HUD(TITLE_HUD, args.width, args.height)    # HUD sınıfı
-        world = World(TITLE_WORLD, args, timeout=2000.0) # world sınıfı
-
-        
-        # For each module, assign other modules that are going to be used inside that module
-        input_control.start(hud, world)                  # input control hud ve world ile beraber alışacak
-        hud.start()                                      # hud başlıyor         
-        
-        world.start(hud, input_control)                  # world de aynı hudda olduğu gibi diğer iki modülü alıyor
-        #"start ")
-        # Game loop        
-        clock = pygame.time.Clock()
-        #"döngüye gelmedi")
-        i=0
-        while True:           
-            clock.tick_busy_loop(60)
-            if i%1000==1:
-                #i)
-                i+=1
-            # Tick all modules
-            world.tick(clock)
-            hud.tick(clock)
-            input_control.tick(clock)
-
-            # Render all modules
-            display.fill(COLOR_ALUMINIUM_4)
-            world.render(display)
-            hud.render(display)
-            input_control.render(display)
-
-            pygame.display.flip()
-
-        #"Döngüden çıktı")
-    except KeyboardInterrupt:
-        ('\nCancelled by user. Bye!')
-
-    finally:
-        if world is not None:
-            print("destroy CARLA ENV FINAL")
-            world.destroy()
-
-
 def exit_game():
     """Shuts down program and pygame"""
     pygame.quit()
     sys.exit()
 
-# ==============================================================================
-# -- Main --------------------------------------------------------------------
-# ==============================================================================
-
-
-def main():
-    """Parses the arguments received from commandline and runs the game loop"""
-
-    # Define arguments that will be received and parsed
-    #pdb. set_trace() 
-    argparser = argparse.ArgumentParser(
-        description='CARLA No Rendering Mode Visualizer')
-    argparser.add_argument(
-        '-v', '--verbose',
-        action='store_true',
-        dest='debug',
-        help='print debug information')
-    argparser.add_argument(
-        '--host',
-        metavar='H',
-        default='127.0.0.1',
-        help='IP of the host server (default: 127.0.0.1)')
-    argparser.add_argument(
-        '-p', '--port',
-        metavar='P',
-        default=2000,
-        type=int,
-        help='TCP port to listen to (default: 2000)')
-    argparser.add_argument(
-        '--res',
-        metavar='WIDTHxHEIGHT',
-        default='1280x720',
-        help='window resolution (default: 1280x720)')
-    argparser.add_argument(
-        '--filter',
-        metavar='PATTERN',
-        default='vehicle.*',
-        help='actor filter (default: "vehicle.*")')
-    argparser.add_argument(
-        '--map',
-        metavar='TOWN',
-        default=None,
-        help='start a new episode at the given TOWN')
-    argparser.add_argument(
-        '--no-rendering',
-        action='store_true',
-        help='switch off server rendering')
-    argparser.add_argument(
-        '--show-triggers',
-        action='store_true',
-        help='show trigger boxes of traffic signs')
-    argparser.add_argument(
-        '--show-connections',
-        action='store_true',
-        help='show waypoint connections')
-    argparser.add_argument(
-        '--show-spawn-points',
-        action='store_true',
-        help='show recommended spawn points')
-
-    # Parse arguments
-    args = argparser.parse_args()
-    args.description = argparser.description
-    args.width, args.height = [int(x) for x in args.res.split('x')]
-
-    # Print server information
-    log_level = logging.DEBUG if args.debug else logging.INFO
-    logging.basicConfig(format='%(levelname)s: %(message)s', level=log_level)
-
-    logging.info('listening to server %s:%s', args.host, args.port)
-    print(__doc__)
-
-    # Run game loop
-    game_loop(args)
-
-
 if __name__ == '__main__':
-    main()
+    # main()
+    pass
