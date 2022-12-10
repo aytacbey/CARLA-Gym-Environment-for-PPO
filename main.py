@@ -3,7 +3,15 @@
 	https://medium.com/@eyyu/coding-ppo-from-scratch-with-pytorch-part-1-4-613dfc1b14c8
 """
 
-
+"""
+Created on Sat May 14 18:13:38 2022
+    
+@author: Aytaç Kasımoğlu
+"""
+import os
+import argparse
+from threading import Thread
+from CarlaEnv import InputControl, HUD, World
 import sys
 import torch
 import pygame
@@ -11,9 +19,50 @@ from arguments import get_args
 from ppo import PPO
 from network import FeedForwardNN
 from eval_policy import eval_policy
-import csv
+
+
+COLOR_BUTTER_0 = pygame.Color(252, 233, 79)
+COLOR_BUTTER_1 = pygame.Color(237, 212, 0)
+COLOR_BUTTER_2 = pygame.Color(196, 160, 0)
+    
+COLOR_ORANGE_0 = pygame.Color(252, 175, 62)
+COLOR_ORANGE_1 = pygame.Color(245, 121, 0)
+COLOR_ORANGE_2 = pygame.Color(209, 92, 0)
+
+COLOR_CHOCOLATE_0 = pygame.Color(233, 185, 110)
+COLOR_CHOCOLATE_1 = pygame.Color(193, 125, 17)
+COLOR_CHOCOLATE_2 = pygame.Color(143, 89, 2)
+
+COLOR_CHAMELEON_0 = pygame.Color(138, 226, 52)
+COLOR_CHAMELEON_1 = pygame.Color(115, 210, 22)
+COLOR_CHAMELEON_2 = pygame.Color(78, 154, 6)
+
+COLOR_SKY_BLUE_0 = pygame.Color(114, 159, 207)
+COLOR_SKY_BLUE_1 = pygame.Color(52, 101, 164)
+COLOR_SKY_BLUE_2 = pygame.Color(32, 74, 135)
+
+COLOR_PLUM_0 = pygame.Color(173, 127, 168)
+COLOR_PLUM_1 = pygame.Color(117, 80, 123)
+COLOR_PLUM_2 = pygame.Color(92, 53, 102)
+
+COLOR_SCARLET_RED_0 = pygame.Color(239, 41, 41)
+COLOR_SCARLET_RED_1 = pygame.Color(204, 0, 0)
+COLOR_SCARLET_RED_2 = pygame.Color(164, 0, 0)
+
+COLOR_ALUMINIUM_0 = pygame.Color(238, 238, 236)
+COLOR_ALUMINIUM_1 = pygame.Color(211, 215, 207)
+COLOR_ALUMINIUM_2 = pygame.Color(186, 189, 182)
+COLOR_ALUMINIUM_3 = pygame.Color(136, 138, 133)
+COLOR_ALUMINIUM_4 = pygame.Color(85, 87, 83)
+COLOR_ALUMINIUM_4_5 = pygame.Color(66, 62, 64)
+COLOR_ALUMINIUM_5 = pygame.Color(46, 52, 54)
+
+COLOR_WHITE = pygame.Color(255, 255, 255)
+COLOR_BLACK = pygame.Color(0, 0, 0)
+
 
 env= None
+
 def train(env, hyperparameters, actor_model, critic_model):
     """
 		Trains the model.
@@ -84,13 +133,13 @@ def test(env, actor_model):
 	# independently as a binary file that can be loaded in with torch.
     eval_policy(policy=policy, env=env, render=True)
 
-def main(args):
+def main(args_env):
     
     """
 		The main function to run.
 
 		Parameters:
-			args - the arguments parsed from command line
+			args_env - the arguments parsed from command line
 
 		Return:
 			None
@@ -109,28 +158,23 @@ def main(args):
 				'render_every_i': 10
 			  }
 
-	# Creates the environment we'll be running. If you want to replace with your own
-	# custom environment, note that it must inherit Gym and have both continuous
-	# observation and action spaces.
-#	env = gym.make('Pendulum-v0')
-
 	# Train or test, depending on the mode specified
-    if args2.mode == 'train':
-        print("train MODDDDD")
-        train(env=world, hyperparameters=hyperparameters, actor_model=args2.actor_model, critic_model=args2.critic_model)
+    if args_PPO.mode == 'train':
+        print("train mode")
+        train(env=world, hyperparameters=hyperparameters, 
+              actor_model=args_PPO.actor_model, 
+              critic_model=args_PPO.critic_model)
     else:
-        test(env=env, actor_model=args2.actor_model)
+        test(env=env, actor_model=args_PPO.actor_model)
 
 
 def pygame_loop(world,hud,input_control,display,clock, COLOR_ALUMINIUM_4):
- #   print("")
     clock.tick_busy_loop(60)
     
     # Tick all modules
     world.tick(clock)
     input_control.tick(clock)    
     hud.tick(clock)
- #   print("pygame loop")
 
     # Render all modules
     display.fill(COLOR_ALUMINIUM_4)
@@ -139,141 +183,34 @@ def pygame_loop(world,hud,input_control,display,clock, COLOR_ALUMINIUM_4):
     input_control.render(display)
 
     pygame.display.flip()
+    
+    
 if __name__ == '__main__':
-    args2 = get_args() # Parse arguments from command line
 
-    """
-    Created on Sat May 14 18:13:38 2022
-    
-    @author: aytac
-    """
-    import os
-    import argparse
-    from threading import Thread
-    from CarlaEnv import InputControl, HUD, World
-    
-
-    import pygame
-    COLOR_BUTTER_0 = pygame.Color(252, 233, 79)
-    COLOR_BUTTER_1 = pygame.Color(237, 212, 0)
-    COLOR_BUTTER_2 = pygame.Color(196, 160, 0)
-    
-    COLOR_ORANGE_0 = pygame.Color(252, 175, 62)
-    COLOR_ORANGE_1 = pygame.Color(245, 121, 0)
-    COLOR_ORANGE_2 = pygame.Color(209, 92, 0)
-    
-    COLOR_CHOCOLATE_0 = pygame.Color(233, 185, 110)
-    COLOR_CHOCOLATE_1 = pygame.Color(193, 125, 17)
-    COLOR_CHOCOLATE_2 = pygame.Color(143, 89, 2)
-    
-    COLOR_CHAMELEON_0 = pygame.Color(138, 226, 52)
-    COLOR_CHAMELEON_1 = pygame.Color(115, 210, 22)
-    COLOR_CHAMELEON_2 = pygame.Color(78, 154, 6)
-    
-    COLOR_SKY_BLUE_0 = pygame.Color(114, 159, 207)
-    COLOR_SKY_BLUE_1 = pygame.Color(52, 101, 164)
-    COLOR_SKY_BLUE_2 = pygame.Color(32, 74, 135)
-    
-    COLOR_PLUM_0 = pygame.Color(173, 127, 168)
-    COLOR_PLUM_1 = pygame.Color(117, 80, 123)
-    COLOR_PLUM_2 = pygame.Color(92, 53, 102)
-    
-    COLOR_SCARLET_RED_0 = pygame.Color(239, 41, 41)
-    COLOR_SCARLET_RED_1 = pygame.Color(204, 0, 0)
-    COLOR_SCARLET_RED_2 = pygame.Color(164, 0, 0)
-    
-    COLOR_ALUMINIUM_0 = pygame.Color(238, 238, 236)
-    COLOR_ALUMINIUM_1 = pygame.Color(211, 215, 207)
-    COLOR_ALUMINIUM_2 = pygame.Color(186, 189, 182)
-    COLOR_ALUMINIUM_3 = pygame.Color(136, 138, 133)
-    COLOR_ALUMINIUM_4 = pygame.Color(85, 87, 83)
-    COLOR_ALUMINIUM_4_5 = pygame.Color(66, 62, 64)
-    COLOR_ALUMINIUM_5 = pygame.Color(46, 52, 54)
-    
-    
-    COLOR_WHITE = pygame.Color(255, 255, 255)
-    COLOR_BLACK = pygame.Color(0, 0, 0)
-    
-    
     """Parses the arguments received from commandline and runs the game loop"""
-    
-    # Define arguments that will be received and parsed
-    #pdb. set_trace() 
-    argparser = argparse.ArgumentParser(
-        description='CARLA No Rendering Mode Visualizer')
-    argparser.add_argument(
-        '-v', '--verbose',
-        action='store_true',
-        dest='debug',
-        help='print debug information')
-    argparser.add_argument(
-        '--host',
-        metavar='H',
-        default='127.0.0.1',
-        help='IP of the host server (default: 127.0.0.1)')
-    argparser.add_argument(
-        '-p', '--port',
-        metavar='P',
-        default=2000,
-        type=int,
-        help='TCP port to listen to (default: 2000)')
-    argparser.add_argument(
-        '--res',
-        metavar='WIDTHxHEIGHT',
-        default='1280x720',
-        help='window resolution (default: 1280x720)')
-    argparser.add_argument(
-        '--filter',
-        metavar='PATTERN',
-        default='vehicle.*',
-        help='actor filter (default: "vehicle.*")')
-    argparser.add_argument(
-        '--map',
-        metavar='TOWN',
-        default=None,
-        help='start a new episode at the given TOWN')
-    argparser.add_argument(
-        '--no-rendering',
-        action='store_true',
-        help='switch off server rendering')
-    argparser.add_argument(
-        '--show-triggers',
-        action='store_true',
-        help='show trigger boxes of traffic signs')
-    argparser.add_argument(
-        '--show-connections',
-        action='store_true',
-        help='show waypoint connections')
-    argparser.add_argument(
-        '--show-spawn-points',
-        action='store_true',
-        help='show recommended spawn points')
-    
-    pygame.init()
-    # Parse arguments
-    args = argparser.parse_args()
-    args.description = argparser.description
-    args.width, args.height = [int(x) for x in args.res.split('x')]
-    
+
+    args_PPO, args_env, args_env.description = get_args() # Parse arguments from command line
+    args_env.width, args_env.height = [int(x) for x in args_env.res.split('x')]
+    pygame.init()    
     
     try:
 
         display = pygame.display.set_mode(
-        (args.width, args.height),
+        (args_env.width, args_env.height),
         pygame.HWSURFACE | pygame.DOUBLEBUF)
-        input_control = InputControl("TITLE_INPUT")        # input kontrol nesnesi
-        hud = HUD("TITLE_HUD", args.width, args.height)    # HUD sınıfı
-        world = World("TITLE_WORLD", args, timeout=2000.0) # world sınıfı
+        input_control = InputControl("TITLE_INPUT")    # input control instance
+        hud = HUD("TITLE_HUD", args_env.width, args_env.height)    
+        world = World("TITLE_WORLD", args_env, timeout=2000.0) 
         
         # For each module, assign other modules that are going to be used inside that module
-        input_control.start(hud, world)                  # input control hud ve world ile beraber çalışacak
-        hud.start()                                      # hud başlıyor         
+        input_control.start(hud, world)  # input control requires hud and world
+        hud.start()                      # hud started        
 
         # Game loop        
         clock = pygame.time.Clock()
         clock.tick_busy_loop(60)
       
-        world.start(hud, input_control, display, clock, COLOR_ALUMINIUM_4)                  # world de aynı hudda olduğu gibi diğer iki modülü alıyor    
+        world.start(hud, input_control, display, clock, COLOR_ALUMINIUM_4)   
     
 
         """Before starting the PPO algorithm let's render the first scene"""
@@ -289,28 +226,9 @@ if __name__ == '__main__':
         input_control.render(display)
 
         pygame.display.flip()
-        main(args)
-        
+        main(args_env)
 
-            
-        # while True:           
-        #     clock.tick_busy_loop(60)
 
-        #     # Tick all modules
-        #     world.tick(clock)
-        #     hud.tick(clock)
-        #     input_control.tick(clock)
-    
-        #     # Render all modules
-        #     display.fill(COLOR_ALUMINIUM_4)
-        #     world.render(display)
-        #     hud.render(display)
-        #     input_control.render(display)
-    
-        #     pygame.display.flip()
-            
-    
-        print("Döngüden çıktı")
     except KeyboardInterrupt:
         print('\nCancelled by user. Bye!')
     
@@ -318,7 +236,3 @@ if __name__ == '__main__':
         if world is not None:
             print("destroy MAIN FINAL")
             world.destroy()
-    
-
-    
-  #  main(args)
