@@ -6,7 +6,7 @@ Secondly PPO was based on @eyyu's work called [PPO-for-Beginners](https://github
 
 # How it works?
 First of al it's recommended to create an virtual environment for this repo in order to not collide with pre-existing packages or even python version. There are numerous tutorials for virtual environments and how to activate them. In short below commands should be sufficient.
-```python3 -m venv /path/to/new/virtual/environment```
-```source <venv>/bin/activate```
+```python3 -m venv /path/to/new/virtual/environment
+source <venv>/bin/activate```
 First run the CARLA simulator ```./CarlaUE4.sh``` for linux.  
  
