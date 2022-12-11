@@ -5,6 +5,8 @@ For those who wants to turn CARLA 3D simulator into a gym-like environment in or
 Secondly PPO was based on @eyyu's work called [PPO-for-Beginners](https://github.com/ericyangyu/PPO-for-Beginners). I would like to thank both parties for their contribution.
 
 # How it works?
-First of al it's recommended to create an virtual environment for this repo in order to not collide with pre-existing packages or even python version. There are numerous tutorials for virtual environments and how to activate them. 
+First of al it's recommended to create an virtual environment for this repo in order to not collide with pre-existing packages or even python version. There are numerous tutorials for virtual environments and how to activate them. In short below commands should be sufficient.
+```python3 -m venv /path/to/new/virtual/environment```
+```source <venv>/bin/activate```
 First run the CARLA simulator ```./CarlaUE4.sh``` for linux.  
  
